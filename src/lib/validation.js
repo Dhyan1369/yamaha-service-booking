@@ -66,3 +66,18 @@ export const validatePassword = (passwordStr) => {
   }
   return { valid: true, message: '' };
 };
+
+export const validateBookingData = ({ name, phone, bikeModel, vehicleNo, serviceType }) => {
+  const errors = {};
+  if (!name?.trim()) errors.name = 'Customer name is required';
+  if (!bikeModel?.trim()) errors.bikeModel = 'Bike model is required';
+  if (!vehicleNo?.trim()) errors.vehicleNo = 'Vehicle plate number is required';
+  if (!['Free Service', 'Full Service', 'Normal Service'].includes(serviceType)) {
+    errors.serviceType = 'Please select a valid service type';
+  }
+
+  const phoneCheck = validatePhone(phone);
+  if (!phoneCheck.valid) errors.phone = phoneCheck.message;
+
+  return { valid: Object.keys(errors).length === 0, errors };
+};
