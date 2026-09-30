@@ -38,6 +38,26 @@ export const calculateSlotTime = (token) => {
   return `${String(displayHour).padStart(2, '0')}:${String(slotMin).padStart(2, '0')} ${ampm}`;
 };
 
+// Converts Supabase PostgreSQL snake_case columns to Frontend camelCase properties
+const mapBookingFromDb = (row) => {
+  if (!row) return null;
+  return {
+    id: row.id,
+    tokenNo: row.token_no ?? row.tokenNo,
+    timeSlot: row.time_slot ?? row.timeSlot,
+    name: row.name,
+    phone: row.phone,
+    nic: row.nic,
+    bikeModel: row.bike_model ?? row.bikeModel,
+    vehicleNo: row.vehicle_no ?? row.vehicleNo,
+    serviceType: row.service_type ?? row.serviceType,
+    status: row.status,
+    date: row.date,
+    userId: row.user_id ?? row.userId,
+    createdAt: row.created_at ?? row.createdAt
+  };
+};
+
 const LOCAL_STORAGE_KEY = 'yamaha_bookings_store';
 
 const getLocalBookings = () => {
@@ -63,31 +83,82 @@ const saveLocalBookings = (bookings) => {
 };
 
 export const bookingService = {
-  async getBookings() {
+  async getBookings(dateFilter = null) {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .order('tokenNo', { ascending: true });
+      let query = supabase.from('bookings').select('*');
+      if (dateFilter) {
+        query = query.eq('date', dateFilter);
+      }
+      query = query.order('token_no', { ascending: true });
 
-      if (!error && data) return data;
-      console.warn('Supabase fetch failed, falling back to local data:', error);
+      const { data, error } = await query;
+
+      if (!error && data) {
+        return data.map(mapBookingFromDb);
+      }
+      console.warn('Supabase fetch failed, using local data fallback:', error);
     }
-    return getLocalBookings();
+    const local = getLocalBookings();
+    return dateFilter ? local.filter(b => b.date === dateFilter) : local;
   },
 
   async createBooking(bookingData) {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
+      // 1. Try atomic creation via RPC (Transaction + Row locking to prevent double bookings)
+      const { data: rpcData, error: rpcError } = await supabase.rpc('create_booking_transaction', {
+        p_date: bookingData.date,
+        p_name: bookingData.name,
+        p_phone: bookingData.phone,
+        p_nic: bookingData.nic,
+        p_bike_model: bookingData.bikeModel,
+        p_vehicle_no: bookingData.vehicleNo,
+        p_service_type: bookingData.serviceType,
+        p_user_id: bookingData.userId || null
+      });
+
+      if (!rpcError && rpcData) {
+        return mapBookingFromDb(rpcData);
+      }
+
+      // If error was SLOT_FULL or Unique constraint violation, throw directly to user UI
+      if (rpcError && rpcError.message.includes('SLOT_FULL')) {
+        throw new Error('Sorry, all 12 service slots for this date are already fully booked!');
+      }
+
+      // 2. Fallback to direct insertion if RPC function is not yet created in Supabase
+      const dbRow = {
+        date: bookingData.date,
+        token_no: bookingData.tokenNo,
+        time_slot: bookingData.timeSlot,
+        name: bookingData.name,
+        phone: bookingData.phone,
+        nic: bookingData.nic,
+        bike_model: bookingData.bikeModel,
+        vehicle_no: bookingData.vehicleNo,
+        service_type: bookingData.serviceType,
+        status: bookingData.status || 'Pending',
+        user_id: bookingData.userId || null
+      };
+
+      const { data: insertData, error: insertError } = await supabase
         .from('bookings')
-        .insert([bookingData])
+        .insert([dbRow])
         .select()
         .single();
 
-      if (!error && data) return data;
-      console.warn('Supabase insert failed, storing locally:', error);
+      if (!insertError && insertData) {
+        return mapBookingFromDb(insertData);
+      }
+
+      if (insertError) {
+        if (insertError.code === '23505') { // Postgres UNIQUE constraint violation code
+          throw new Error('Double booking prevented: This slot or vehicle has already been booked for this date.');
+        }
+        console.warn('Supabase insert failed:', insertError);
+      }
     }
 
+    // Local storage fallback for unconfigured environment
     const current = getLocalBookings();
     const updated = [bookingData, ...current];
     saveLocalBookings(updated);
@@ -103,8 +174,8 @@ export const bookingService = {
         .select()
         .single();
 
-      if (!error && data) return data;
-      console.warn('Supabase update failed, updating locally:', error);
+      if (!error && data) return mapBookingFromDb(data);
+      console.warn('Supabase update status failed:', error);
     }
 
     const current = getLocalBookings();
@@ -113,3 +184,4 @@ export const bookingService = {
     return { id, status: newStatus };
   }
 };
+
