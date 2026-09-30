@@ -7,8 +7,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { validateEmail, validatePhone, validateNIC, validatePassword } from '../../lib/validation';
 
 export default function AuthModal({ isOpen, onClose }) {
-  const { loginWithEmailPassword, signUpWithEmailPassword, googleLogin, updateCustomerProfile } = useAuth();
-  const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'quick'
+  const { loginWithEmailPassword, signUpWithEmailPassword, googleLogin } = useAuth();
+  const [mode, setMode] = useState('signin');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
@@ -49,15 +49,13 @@ export default function AuthModal({ isOpen, onClose }) {
   const validateForm = () => {
     const errors = {};
 
-    if (mode !== 'quick') {
-      const emailCheck = validateEmail(form.email);
-      if (!emailCheck.valid) errors.email = emailCheck.message;
+    const emailCheck = validateEmail(form.email);
+    if (!emailCheck.valid) errors.email = emailCheck.message;
 
-      const passCheck = validatePassword(form.password);
-      if (!passCheck.valid) errors.password = passCheck.message;
-    }
+    const passCheck = validatePassword(form.password);
+    if (!passCheck.valid) errors.password = passCheck.message;
 
-    if (mode === 'signup' || mode === 'quick') {
+    if (mode === 'signup') {
       if (!form.name.trim()) errors.name = 'Full Name is required';
 
       const phoneCheck = validatePhone(form.phone);
@@ -93,15 +91,6 @@ export default function AuthModal({ isOpen, onClose }) {
           bikeModel: form.bikeModel
         });
         handleModalClose();
-      } else {
-        // Quick guest registration
-        await updateCustomerProfile({
-          name: form.name.trim(),
-          nic: form.nic.trim().toUpperCase(),
-          phone: form.phone.trim(),
-          bikeModel: form.bikeModel
-        });
-        handleModalClose();
       }
     } catch (err) {
       const msg = err.message || '';
@@ -119,8 +108,8 @@ export default function AuthModal({ isOpen, onClose }) {
     <Modal
       isOpen={isOpen}
       onClose={handleModalClose}
-      title={mode === 'signin' ? 'Sign In to Account' : mode === 'signup' ? 'Create New Account' : 'Quick Customer Details'}
-      subtitle={mode === 'signin' ? 'Enter your registered email and password' : 'Fill details to register or continue booking'}
+      title={mode === 'signin' ? 'Sign In to Account' : 'Create New Account'}
+      subtitle={mode === 'signin' ? 'Enter your registered email and password' : 'Create an account to manage your bookings'}
     >
       <div className="space-y-4">
         {/* Navigation Mode Selector Tabs */}
@@ -143,15 +132,6 @@ export default function AuthModal({ isOpen, onClose }) {
           >
             Register (Sign Up)
           </button>
-          <button
-            type="button"
-            onClick={() => { setMode('quick'); setErrorMsg(''); setFieldErrors({}); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
-              mode === 'quick' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Guest Quick Form
-          </button>
         </div>
 
         {/* Error Notification Alert Banner */}
@@ -163,7 +143,7 @@ export default function AuthModal({ isOpen, onClose }) {
         )}
 
         {/* Google OAuth Option */}
-        {mode !== 'quick' && (
+        {(
           <>
             <button
               type="button"
@@ -223,7 +203,7 @@ export default function AuthModal({ isOpen, onClose }) {
             </>
           )}
 
-          {(mode === 'signup' || mode === 'quick') && (
+          {mode === 'signup' && (
             <>
               <Input
                 label="Your Full Name"

@@ -4,22 +4,17 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 // eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext(null);
 
-const AUTH_STORAGE_KEY = 'yamaha_auth_user_fallback';
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isSupabaseConfigured);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const formatUser = (sbUser, customMeta = {}) => {
     if (!sbUser) return null;
     const meta = { ...(sbUser.user_metadata || {}), ...customMeta };
     const appMeta = sbUser.app_metadata || {};
-    const email = (sbUser.email || '').toLowerCase();
-    
-    // Check if user has admin role in metadata or email
-    const isAdmin = appMeta.role === 'admin' || email === 'admin@yamahapro.lk' || meta.role === 'admin';
+    const isAdmin = appMeta.role === 'admin';
 
     return {
       id: sbUser.id,
@@ -52,15 +47,6 @@ export function AuthProvider({ children }) {
       });
 
       return () => subscription.unsubscribe();
-    } else {
-      // Fallback local storage for unconfigured environment
-      try {
-        const saved = localStorage.getItem(AUTH_STORAGE_KEY);
-        if (saved) setUser(JSON.parse(saved));
-      } catch {
-        setUser(null);
-      }
-      setLoading(false);
     }
   }, []);
 
@@ -107,18 +93,7 @@ export function AuthProvider({ children }) {
       if (error) throw error;
       return data;
     } else {
-      const fallbackUser = {
-        id: 'mock-user-123',
-        name: 'Charith Fernando',
-        email: 'charith@example.com',
-        nic: '984521098V',
-        phone: '0778901234',
-        bikeModel: 'Yamaha MT-15',
-        isAdmin: false
-      };
-      setUser(fallbackUser);
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(fallbackUser));
-      setShowAuthModal(false);
+      throw new Error('Supabase is not configured. Add the required environment variables before signing in.');
     }
   };
 
@@ -130,9 +105,7 @@ export function AuthProvider({ children }) {
       if (error) throw error;
       setUser(formatUser(data.user));
     } else {
-      const updated = { ...user, ...profileData };
-      setUser(updated);
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+      throw new Error('Supabase is not configured. Customer profiles cannot be stored locally.');
     }
   };
 
@@ -142,7 +115,6 @@ export function AuthProvider({ children }) {
     }
     setUser(null);
     setSession(null);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
   };
 
   const openAuthModal = () => setShowAuthModal(true);
