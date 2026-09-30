@@ -28,7 +28,8 @@ export default function UserDashboard() {
     );
   }
 
-  const customerBookings = getUserBookings(user.phone);
+  // Immediately query bookings for logged-in user object (id, phone, nic)
+  const customerBookings = getUserBookings(user);
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -48,24 +49,30 @@ export default function UserDashboard() {
       {/* Top Profile Summary */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-lg">
         <div className="flex items-center space-x-4">
-          <div className="w-14 h-14 bg-blue-600/20 border border-blue-500/30 rounded-2xl flex items-center justify-center text-blue-400 font-black text-xl">
-            {user.name.charAt(0)}
+          <div className="w-14 h-14 bg-blue-600/20 border border-blue-500/30 rounded-2xl flex items-center justify-center text-blue-400 font-black text-xl uppercase">
+            {(user.name || 'C').charAt(0)}
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-blue-400 font-bold mb-0.5">Customer Dashboard</p>
             <h1 className="text-2xl font-extrabold text-white">ආයුබෝවන්, {user.name}</h1>
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-1">
-              <span className="flex items-center gap-1">
-                <Phone className="w-3.5 h-3.5 text-slate-500" /> {user.phone}
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <CreditCard className="w-3.5 h-3.5 text-slate-500" /> NIC: {user.nic}
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <Bike className="w-3.5 h-3.5 text-slate-500" /> {user.bikeModel}
-              </span>
+              {user.phone && (
+                <span className="flex items-center gap-1">
+                  <Phone className="w-3.5 h-3.5 text-slate-500" /> {user.phone}
+                </span>
+              )}
+              {user.phone && user.nic && <span>•</span>}
+              {user.nic && (
+                <span className="flex items-center gap-1">
+                  <CreditCard className="w-3.5 h-3.5 text-slate-500" /> NIC: {user.nic}
+                </span>
+              )}
+              {user.bikeModel && <span>•</span>}
+              {user.bikeModel && (
+                <span className="flex items-center gap-1">
+                  <Bike className="w-3.5 h-3.5 text-slate-500" /> {user.bikeModel}
+                </span>
+              )}
             </div>
           </div>
         </div>

@@ -19,15 +19,27 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
   const [vehicleNo, setVehicleNo] = useState('');
   const [serviceType, setServiceType] = useState('Free Service');
   const [date, setDate] = useState(() => {
-    // Default to next available non-Monday day
-    const today = new Date();
-    if (today.getDay() === 1) {
-      today.setDate(today.getDate() + 1);
+    // Find the next valid open day from today onward
+    const candidate = new Date();
+    // Try up to 14 days ahead to find an open day
+    for (let i = 0; i < 14; i++) {
+      const y = candidate.getFullYear();
+      const m = String(candidate.getMonth() + 1).padStart(2, '0');
+      const d = String(candidate.getDate()).padStart(2, '0');
+      const key = `${y}-${m}-${d}`;
+      const dow = candidate.getDay(); // 0=Sun, 1=Mon
+      if (dow !== 1 && !POYA_DATES.has(key) && !HOLIDAY_DATES.has(key)) {
+        return key;
+      }
+      candidate.setDate(candidate.getDate() + 1);
     }
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    // Fallback: tomorrow
+    const tmr = new Date();
+    tmr.setDate(tmr.getDate() + 1);
+    const y = tmr.getFullYear();
+    const m = String(tmr.getMonth() + 1).padStart(2, '0');
+    const d = String(tmr.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   });
 
   const [createdBooking, setCreatedBooking] = useState(null);
@@ -49,6 +61,14 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
 
     if (!user) {
       openAuthModal();
+      return;
+    }
+
+    // Guard: reject past dates (in case of any bypass)
+    const todayObj2 = new Date();
+    const todayKey2 = `${todayObj2.getFullYear()}-${String(todayObj2.getMonth() + 1).padStart(2, '0')}-${String(todayObj2.getDate()).padStart(2, '0')}`;
+    if (date < todayKey2) {
+      setErrorMessage('Cannot book a past date. Please select today or a future date.');
       return;
     }
 

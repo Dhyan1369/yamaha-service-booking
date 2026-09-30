@@ -20,30 +20,50 @@ export default function SlotSelector({
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
+  // Build today's YYYY-MM-DD key for past-date comparison
+  const _now = new Date();
+  const todayKey =
+    _now.getFullYear() + '-' +
+    String(_now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(_now.getDate()).padStart(2, '0');
+  const todayYear = _now.getFullYear();
+  const todayMonth = _now.getMonth();
+
+  // Disable the previous-month arrow when already on the current month
+  const canGoPrevMonth =
+    calendarMonth.getFullYear() > todayYear ||
+    (calendarMonth.getFullYear() === todayYear && calendarMonth.getMonth() > todayMonth);
+
   const getCalendarDays = () => {
     const firstDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-    const offset = (firstDay.getDay() + 6) % 7;
+    const offset = (firstDay.getDay() + 6) % 7; // Monday = 0
     const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
     return [
       ...Array(offset).fill(null),
       ...Array.from(
         { length: daysInMonth },
-        (_, index) => new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), index + 1)
+        (_, i) => new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), i + 1)
       )
     ];
   };
 
   const checkIsClosed = (dateObj, dateKey) => {
-    if (!dateObj) return { isClosed: false, reason: '' };
-    const isMonday = dateObj.getDay() === 1;
-    const isPoya = POYA_DATES.has(dateKey);
+    if (!dateObj) return { isClosed: false, isPast: false, reason: '' };
+
+    // Past dates — completely blocked
+    if (dateKey < todayKey) {
+      return { isClosed: true, isPast: true, reason: 'Past date — bookings not allowed' };
+    }
+
+    const isMonday  = dateObj.getDay() === 1;
+    const isPoya    = POYA_DATES.has(dateKey);
     const isHoliday = HOLIDAY_DATES.has(dateKey);
 
-    if (isMonday) return { isClosed: true, reason: 'Closed on Mondays (සඳුදා නිවාඩු)' };
-    if (isPoya) return { isClosed: true, reason: 'Poya Day Closure (පෝය නිවාඩු)' };
-    if (isHoliday) return { isClosed: true, reason: 'Public Holiday Closure (මහජන නිවාඩු)' };
+    if (isMonday)  return { isClosed: true, isPast: false, reason: 'Closed on Mondays (සඳුදා නිවාඩු)' };
+    if (isPoya)    return { isClosed: true, isPast: false, reason: 'Poya Day Closure (පෝය නිවාඩු)' };
+    if (isHoliday) return { isClosed: true, isPast: false, reason: 'Public Holiday (මහජන නිවාඩු)' };
 
-    return { isClosed: false, reason: '' };
+    return { isClosed: false, isPast: false, reason: '' };
   };
 
   return (
@@ -65,27 +85,40 @@ export default function SlotSelector({
         </button>
 
         {calendarOpen && (
-          <div className="absolute z-30 top-full mt-2 left-0 right-0 bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl animate-in fade-in duration-150">
-            {/* Calendar Month Header */}
+          <div className="absolute z-30 top-full mt-2 left-0 right-0 bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl">
+            {/* Month Navigation */}
             <div className="flex items-center justify-between mb-4">
               <button
                 type="button"
                 aria-label="Previous month"
-                onClick={() =>
-                  setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))
-                }
-                className="p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition"
+                disabled={!canGoPrevMonth}
+                onClick={() => {
+                  if (canGoPrevMonth) {
+                    setCalendarMonth(
+                      new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1)
+                    );
+                  }
+                }}
+                className={`p-1.5 rounded-lg transition ${
+                  canGoPrevMonth
+                    ? 'text-slate-300 hover:bg-slate-800'
+                    : 'text-slate-700 cursor-not-allowed opacity-40'
+                }`}
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
+
               <p className="text-sm font-bold text-white">
                 {calendarMonth.toLocaleDateString('en', { month: 'long', year: 'numeric' })}
               </p>
+
               <button
                 type="button"
                 aria-label="Next month"
                 onClick={() =>
-                  setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))
+                  setCalendarMonth(
+                    new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1)
+                  )
                 }
                 className="p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition"
               >
@@ -93,7 +126,7 @@ export default function SlotSelector({
               </button>
             </div>
 
-            {/* Days of Week Header */}
+            {/* Day-of-Week Headers */}
             <div className="grid grid-cols-7 text-center text-[10px] text-slate-500 font-semibold mb-2">
               {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
                 <span key={day} className={day === 'Mo' ? 'text-red-400 font-bold' : ''}>
@@ -106,16 +139,18 @@ export default function SlotSelector({
             <div className="grid grid-cols-7 gap-1">
               {getCalendarDays().map((date, index) => {
                 if (!date) return <span key={`empty-${index}`} />;
+
                 const dateKey = toDateKey(date);
-                const { isClosed, reason } = checkIsClosed(date, dateKey);
+                const { isClosed, isPast, reason } = checkIsClosed(date, dateKey);
                 const isSelected = selectedDate === dateKey;
-                const isMonday = date.getDay() === 1;
+                const isMonday  = date.getDay() === 1;
+                const isToday   = dateKey === todayKey;
 
                 return (
                   <button
                     key={dateKey}
                     type="button"
-                    title={reason}
+                    title={reason || (isToday ? 'Today' : '')}
                     disabled={isClosed}
                     onClick={() => {
                       if (!isClosed) {
@@ -126,24 +161,34 @@ export default function SlotSelector({
                     className={`relative h-9 rounded-lg text-xs font-medium transition ${
                       isSelected
                         ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/40'
+                        : isPast
+                        ? 'text-slate-700 cursor-not-allowed'
                         : isClosed
                         ? 'bg-slate-950/80 text-slate-600 cursor-not-allowed border border-slate-900'
+                        : isToday
+                        ? 'ring-1 ring-blue-500/50 text-blue-300 hover:bg-slate-800'
                         : 'text-slate-200 hover:bg-slate-800'
                     }`}
                   >
                     <span>{date.getDate()}</span>
 
-                    {/* Monday Lock Icon or Holiday Dot */}
-                    {isMonday ? (
+                    {/* Monday lock — only on future/today Mondays */}
+                    {!isPast && isMonday && (
                       <Lock className="w-2.5 h-2.5 absolute bottom-1 right-1 text-red-500/70" />
-                    ) : (
-                      (POYA_DATES.has(dateKey) || HOLIDAY_DATES.has(dateKey)) && (
-                        <span
-                          className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${
-                            POYA_DATES.has(dateKey) ? 'bg-amber-400' : 'bg-rose-400'
-                          }`}
-                        />
-                      )
+                    )}
+
+                    {/* Poya / Holiday dot — only on future/today non-Mondays */}
+                    {!isPast && !isMonday && (POYA_DATES.has(dateKey) || HOLIDAY_DATES.has(dateKey)) && (
+                      <span
+                        className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${
+                          POYA_DATES.has(dateKey) ? 'bg-amber-400' : 'bg-rose-400'
+                        }`}
+                      />
+                    )}
+
+                    {/* Blue dot marks today */}
+                    {isToday && !isSelected && (
+                      <span className="absolute top-1 right-1 w-1 h-1 rounded-full bg-blue-400" />
                     )}
                   </button>
                 );
@@ -156,10 +201,13 @@ export default function SlotSelector({
                 <Lock className="w-2.5 h-2.5" /> සඳුදා (Mondays Closed)
               </span>
               <span className="inline-flex items-center gap-1">
-                <i className="w-2 h-2 rounded-full bg-amber-400" /> පෝය දිනය (Poya Closed)
+                <i className="w-2 h-2 rounded-full bg-amber-400 not-italic" /> පෝය (Poya)
               </span>
               <span className="inline-flex items-center gap-1">
-                <i className="w-2 h-2 rounded-full bg-rose-400" /> මහජන නිවාඩු (Public Holiday)
+                <i className="w-2 h-2 rounded-full bg-rose-400 not-italic" /> නිවාඩු (Holiday)
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-slate-700" /> Past Date
               </span>
             </div>
           </div>
