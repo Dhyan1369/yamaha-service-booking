@@ -1,4 +1,20 @@
-# React + Vite
+# Yamaha Service Booking
+
+## Setup
+
+1. Copy `.env.example` to `.env.local` and add the Supabase project URL and public anon key.
+2. Apply [001_booking_security.sql](supabase/migrations/001_booking_security.sql) in the Supabase SQL editor.
+3. Assign workshop staff with the server-managed Supabase `app_metadata.role = 'admin'`. Do not use user metadata or an email address for roles.
+4. Start the app with `npm run dev` from this directory.
+
+Bookings require the `create_booking_transaction` and `get_booking_availability` functions from the migration. The client intentionally does not fall back to local storage or direct table inserts because those paths cannot enforce ownership, capacity, quota, or token uniqueness.
+
+## Checks
+
+```text
+npm run lint
+npm run build
+```
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
