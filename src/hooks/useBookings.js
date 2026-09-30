@@ -77,9 +77,16 @@ export function useBookings() {
     return bookings.filter((b) => b.date === date);
   };
 
-  const getUserBookings = (phone) => {
-    if (!phone) return [];
-    return bookings.filter((b) => b.phone === phone);
+  const getUserBookings = (userParam) => {
+    if (!userParam) return [];
+    if (typeof userParam === 'string') {
+      return bookings.filter((b) => b.phone === userParam || b.userId === userParam || b.nic === userParam);
+    }
+    return bookings.filter((b) => 
+      (userParam.id && b.userId === userParam.id) ||
+      (userParam.phone && b.phone === userParam.phone) ||
+      (userParam.nic && b.nic === userParam.nic)
+    );
   };
 
   const getSlotStats = (date) => {
