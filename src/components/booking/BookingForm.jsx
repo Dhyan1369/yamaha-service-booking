@@ -7,6 +7,7 @@ import SlotSelector from './SlotSelector';
 import TokenReceipt from './TokenReceipt';
 import { useAuth } from '../../hooks/useAuth';
 import { useBookings } from '../../hooks/useBookings';
+import { POYA_DATES, HOLIDAY_DATES } from '../../services/bookingService';
 
 export default function BookingForm({ onBookingSuccess, onCancel }) {
   const { user, openAuthModal } = useAuth();
@@ -17,7 +18,17 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
   const [bikeModel, setBikeModel] = useState(user?.bikeModel || 'Yamaha FZ-S V3');
   const [vehicleNo, setVehicleNo] = useState('');
   const [serviceType, setServiceType] = useState('Free Service');
-  const [date, setDate] = useState('2026-09-30');
+  const [date, setDate] = useState(() => {
+    // Default to next available non-Monday day
+    const today = new Date();
+    if (today.getDay() === 1) {
+      today.setDate(today.getDate() + 1);
+    }
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
 
   const [createdBooking, setCreatedBooking] = useState(null);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -38,6 +49,27 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
 
     if (!user) {
       openAuthModal();
+      return;
+    }
+
+    // Check Monday closure (getDay === 1)
+    const dateParts = date.split('-');
+    if (dateParts.length === 3) {
+      const targetDateObj = new Date(parseInt(dateParts[0], 10), parseInt(dateParts[1], 10) - 1, parseInt(dateParts[2], 10));
+      if (targetDateObj.getDay() === 1) {
+        setErrorMessage('Samawenna! සඳුදා (Monday) දිනවල සේවා මධ්‍යස්ථානය වසා ඇත. කරුණාකර වෙනත් දිනයක් තෝරන්න.');
+        return;
+      }
+    }
+
+    // Check Poya Day closure
+    if (POYA_DATES.has(date)) {
+      setErrorMessage('Samawenna! පෝය (Poya) දිනවල සේවා මධ්‍යස්ථානය වසා ඇත. කරුණාකර වෙනත් දිනයක් තෝරන්න.');
+      return;
+    }
+
+    if (HOLIDAY_DATES.has(date)) {
+      setErrorMessage('Samawenna! රජයේ ප්‍රසිද්ධ නිවාඩු දිනවල සේවා මධ්‍යස්ථානය වසා ඇත. කරුණාකර වෙනත් දිනයක් තෝරන්න.');
       return;
     }
 
@@ -67,7 +99,8 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
         vehicleNo,
         serviceType,
         status: 'Pending',
-        date
+        date,
+        userId: user.id || null
       };
 
       const result = await addBooking(newBooking);
@@ -207,3 +240,4 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
     </>
   );
 }
+

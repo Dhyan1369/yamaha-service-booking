@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { POYA_DATES, HOLIDAY_DATES, toDateKey } from '../../services/bookingService';
 
 export default function SlotSelector({
@@ -16,7 +16,8 @@ export default function SlotSelector({
         return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
       }
     }
-    return new Date(2026, 8, 1);
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
   const getCalendarDays = () => {
@@ -30,6 +31,19 @@ export default function SlotSelector({
         (_, index) => new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), index + 1)
       )
     ];
+  };
+
+  const checkIsClosed = (dateObj, dateKey) => {
+    if (!dateObj) return { isClosed: false, reason: '' };
+    const isMonday = dateObj.getDay() === 1;
+    const isPoya = POYA_DATES.has(dateKey);
+    const isHoliday = HOLIDAY_DATES.has(dateKey);
+
+    if (isMonday) return { isClosed: true, reason: 'Closed on Mondays (සඳුදා නිවාඩු)' };
+    if (isPoya) return { isClosed: true, reason: 'Poya Day Closure (පෝය නිවාඩු)' };
+    if (isHoliday) return { isClosed: true, reason: 'Public Holiday Closure (මහජන නිවාඩු)' };
+
+    return { isClosed: false, reason: '' };
   };
 
   return (
@@ -82,7 +96,9 @@ export default function SlotSelector({
             {/* Days of Week Header */}
             <div className="grid grid-cols-7 text-center text-[10px] text-slate-500 font-semibold mb-2">
               {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
-                <span key={day}>{day}</span>
+                <span key={day} className={day === 'Mo' ? 'text-red-400 font-bold' : ''}>
+                  {day}
+                </span>
               ))}
             </div>
 
@@ -91,33 +107,43 @@ export default function SlotSelector({
               {getCalendarDays().map((date, index) => {
                 if (!date) return <span key={`empty-${index}`} />;
                 const dateKey = toDateKey(date);
-                const isMonday = date.getDay() === 1;
-                const isPoya = POYA_DATES.has(dateKey);
-                const isHoliday = HOLIDAY_DATES.has(dateKey);
+                const { isClosed, reason } = checkIsClosed(date, dateKey);
                 const isSelected = selectedDate === dateKey;
+                const isMonday = date.getDay() === 1;
 
                 return (
                   <button
                     key={dateKey}
                     type="button"
+                    title={reason}
+                    disabled={isClosed}
                     onClick={() => {
-                      onDateChange(dateKey);
-                      setCalendarOpen(false);
+                      if (!isClosed) {
+                        onDateChange(dateKey);
+                        setCalendarOpen(false);
+                      }
                     }}
                     className={`relative h-9 rounded-lg text-xs font-medium transition ${
                       isSelected
                         ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/40'
+                        : isClosed
+                        ? 'bg-slate-950/80 text-slate-600 cursor-not-allowed border border-slate-900'
                         : 'text-slate-200 hover:bg-slate-800'
-                    } ${isMonday && !isSelected ? 'bg-slate-800/60 text-slate-300' : ''}`}
+                    }`}
                   >
-                    {date.getDate()}
-                    {(isPoya || isHoliday) && (
-                      <span
-                        title={isPoya ? 'Poya Day' : 'Public Holiday'}
-                        className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${
-                          isPoya ? 'bg-amber-400' : 'bg-rose-400'
-                        }`}
-                      />
+                    <span>{date.getDate()}</span>
+
+                    {/* Monday Lock Icon or Holiday Dot */}
+                    {isMonday ? (
+                      <Lock className="w-2.5 h-2.5 absolute bottom-1 right-1 text-red-500/70" />
+                    ) : (
+                      (POYA_DATES.has(dateKey) || HOLIDAY_DATES.has(dateKey)) && (
+                        <span
+                          className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${
+                            POYA_DATES.has(dateKey) ? 'bg-amber-400' : 'bg-rose-400'
+                          }`}
+                        />
+                      )
                     )}
                   </button>
                 );
@@ -126,14 +152,14 @@ export default function SlotSelector({
 
             {/* Legend */}
             <div className="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-x-3 gap-y-2 text-[10px] text-slate-400">
-              <span className="inline-flex items-center gap-1">
-                <i className="w-2 h-2 rounded-sm bg-slate-700 border border-slate-600" /> සඳුදා (Monday)
+              <span className="inline-flex items-center gap-1 font-semibold text-red-400">
+                <Lock className="w-2.5 h-2.5" /> සඳුදා (Mondays Closed)
               </span>
               <span className="inline-flex items-center gap-1">
-                <i className="w-2 h-2 rounded-full bg-amber-400" /> පෝය දිනය (Poya)
+                <i className="w-2 h-2 rounded-full bg-amber-400" /> පෝය දිනය (Poya Closed)
               </span>
               <span className="inline-flex items-center gap-1">
-                <i className="w-2 h-2 rounded-full bg-rose-400" /> නිවාඩු දිනය (Holiday)
+                <i className="w-2 h-2 rounded-full bg-rose-400" /> මහජන නිවාඩු (Public Holiday)
               </span>
             </div>
           </div>
@@ -142,3 +168,4 @@ export default function SlotSelector({
     </div>
   );
 }
+
