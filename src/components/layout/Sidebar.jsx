@@ -11,7 +11,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const links = [
     { name: 'Home', path: '/', icon: Home },
-    ...(!user ? [{ name: 'Book Service', path: '/booking', icon: User }] : []),
+    ...(!user || !user.isAdmin ? [{ name: 'Book Service', path: '/booking', icon: User }] : []),
     ...(user && !user.isAdmin ? [{ name: 'My Dashboard', path: '/dashboard', icon: User }] : []),
     ...(user?.isAdmin ? [{ name: 'Admin Dashboard', path: '/admin', icon: ShieldCheck }] : [])
   ];
@@ -34,7 +34,7 @@ export default function Sidebar({ isOpen, onClose }) {
               <div className="bg-blue-600 p-1.5 rounded-lg">
                 <Bike className="w-5 h-5 text-white" />
               </div>
-              <span className="font-bold text-white text-sm">Yamaha Pro Service</span>
+              <span className="font-bold text-white text-sm">Manju Yamaha Service</span>
             </div>
             <button
               onClick={onClose}

@@ -9,7 +9,7 @@ export default function Header({ onOpenSidebar }) {
 
   const navLinks = [
     { name: 'Home', path: '/' },
-    { name: 'Book Service', path: '/booking' },
+    ...(!user?.isAdmin ? [{ name: 'Book Service', path: '/booking' }] : []),
     ...(user && !user.isAdmin ? [{ name: 'My Dashboard', path: '/dashboard' }] : []),
     ...(user?.isAdmin ? [{ name: 'Admin Dashboard', path: '/admin' }] : []),
   ];
@@ -24,9 +24,9 @@ export default function Header({ onOpenSidebar }) {
           </div>
           <div>
             <span className="text-xl font-black tracking-wider text-white flex items-center gap-1.5">
-              YAMAHA <span className="text-red-500">PRO</span> SERVICE
+              MANJU <span className="text-red-500">YAMAHA</span> SERVICE
             </span>
-            <p className="text-xs text-slate-400 font-medium">Authorized Technical Workshop</p>
+            <p className="text-xs text-slate-400 font-medium">Kamburupitiya Service Center</p>
           </div>
         </Link>
 
