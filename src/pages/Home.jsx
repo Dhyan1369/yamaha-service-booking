@@ -1,19 +1,15 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShieldCheck, 
   ChevronRight, Wrench, Sparkles, Award, Zap
 } from 'lucide-react';
-import Modal from '../components/common/Modal';
-import BookingForm from '../components/booking/BookingForm';
 import { useAuth } from '../hooks/useAuth';
 import { useBookings } from '../hooks/useBookings';
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user, openAuthModal } = useAuth();
+  const { user } = useAuth();
   const { getSlotStats } = useBookings();
-  const [showBookingModal, setShowBookingModal] = useState(false);
 
   // Today's stats
   const todayObj = new Date();
@@ -30,11 +26,7 @@ export default function Home() {
       navigate('/admin');
       return;
     }
-    if (!user) {
-      openAuthModal();
-      return;
-    }
-    setShowBookingModal(true);
+    navigate('/booking');
   };
 
   const handleViewSlots = () => {
@@ -170,18 +162,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Booking Modal */}
-      <Modal
-        isOpen={showBookingModal}
-        onClose={() => setShowBookingModal(false)}
-        title="Book Service Token"
-        subtitle="Service slot එකක් වෙන්කරවා ගැනීමට විස්තර තහවුරු කරන්න."
-      >
-        <BookingForm
-          onBookingSuccess={() => setShowBookingModal(false)}
-          onCancel={() => setShowBookingModal(false)}
-        />
-      </Modal>
     </div>
   );
 }

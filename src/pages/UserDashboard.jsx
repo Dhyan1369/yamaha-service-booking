@@ -1,15 +1,13 @@
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, Bike, Phone, CreditCard, Wrench, Calendar } from 'lucide-react';
 import Button from '../components/common/Button';
-import Modal from '../components/common/Modal';
-import BookingForm from '../components/booking/BookingForm';
 import { useAuth } from '../hooks/useAuth';
 import { useBookings } from '../hooks/useBookings';
 
 export default function UserDashboard() {
   const { user, openAuthModal } = useAuth();
   const { getUserBookings } = useBookings();
-  const [showBookingModal, setShowBookingModal] = useState(false);
+  const navigate = useNavigate();
 
   if (!user) {
     return (
@@ -81,7 +79,7 @@ export default function UserDashboard() {
           variant="primary"
           size="md"
           icon={Wrench}
-          onClick={() => setShowBookingModal(true)}
+          onClick={() => navigate('/booking')}
         >
           Book a Service
         </Button>
@@ -147,25 +145,13 @@ export default function UserDashboard() {
               <p className="font-bold text-white text-base">ඔබට තවම service booking නොමැත.</p>
               <p className="text-xs text-slate-400 mt-1">ඔබගේ ප්‍රථම සේවා වාරය වෙන්කරවා ගැනීමට පහත බොත්තම ඔබන්න.</p>
             </div>
-            <Button variant="primary" size="sm" onClick={() => setShowBookingModal(true)}>
+            <Button variant="primary" size="sm" onClick={() => navigate('/booking')}>
               Book Service Now
             </Button>
           </div>
         )}
       </div>
 
-      {/* Booking Modal */}
-      <Modal
-        isOpen={showBookingModal}
-        onClose={() => setShowBookingModal(false)}
-        title="Book Service Token"
-        subtitle="Service slot එකක් වෙන්කරවා ගැනීමට විස්තර තහවුරු කරන්න."
-      >
-        <BookingForm
-          onBookingSuccess={() => setShowBookingModal(false)}
-          onCancel={() => setShowBookingModal(false)}
-        />
-      </Modal>
     </div>
   );
 }

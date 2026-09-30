@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { User, Phone, Wrench, AlertCircle } from 'lucide-react';
 import Input from '../common/Input';
 import Button from '../common/Button';
@@ -8,10 +8,11 @@ import TokenReceipt from './TokenReceipt';
 import { useAuth } from '../../hooks/useAuth';
 import { useBookings } from '../../hooks/useBookings';
 import { POYA_DATES, HOLIDAY_DATES } from '../../services/bookingService';
+import { validateBookingData } from '../../lib/validation';
 
 export default function BookingForm({ onBookingSuccess, onCancel }) {
   const { user, openAuthModal } = useAuth();
-  const { addBooking, getSlotStats } = useBookings();
+  const { addBooking, getSlotStats, refreshAvailability } = useBookings();
 
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
@@ -55,6 +56,10 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
   // Slot statistics for the currently selected date in the form
   const stats = getSlotStats(date);
 
+  useEffect(() => {
+    refreshAvailability(date);
+  }, [date, refreshAvailability]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
@@ -93,6 +98,18 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
       return;
     }
 
+    const validation = validateBookingData({
+      name: customerName,
+      phone: customerPhone,
+      bikeModel: selectedBikeModel,
+      vehicleNo,
+      serviceType
+    });
+    if (!validation.valid) {
+      setErrorMessage(Object.values(validation.errors)[0]);
+      return;
+    }
+
     if (stats.isDayFull) {
       setErrorMessage('Samawenna! Ada dinayata tokens 12 ma awasan wela aththa.');
       return;
@@ -107,18 +124,13 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
 
     try {
       setSubmitting(true);
-      const nextTokenNo = stats.totalBooked + 1;
       const newBooking = {
-        id: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
-        tokenNo: nextTokenNo,
-        timeSlot: stats.nextSlotTime,
         name: customerName,
         phone: customerPhone,
         nic: user.nic || 'N/A',
         bikeModel: selectedBikeModel,
         vehicleNo,
         serviceType,
-        status: 'Pending',
         date,
         userId: user.id || null
       };

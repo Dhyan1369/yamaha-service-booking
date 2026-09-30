@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ShieldCheck, Search, Calendar, PlusCircle, Wrench, User, Phone, Bike, CreditCard, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { useBookings } from '../hooks/useBookings';
 import Input from '../components/common/Input';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
+import { HOLIDAY_DATES, POYA_DATES } from '../services/bookingService';
+import { validateBookingData } from '../lib/validation';
 
 export default function Admin() {
-  const { updateStatus, getSlotStats, addBooking } = useBookings();
+  const { updateStatus, getSlotStats, addBooking, refreshAvailability } = useBookings();
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -34,6 +36,10 @@ export default function Admin() {
   const stats = getSlotStats(selectedDate);
   const dayBookings = stats.dayBookings;
 
+  useEffect(() => {
+    refreshAvailability(selectedDate);
+  }, [selectedDate, refreshAvailability]);
+
   const filteredBookings = dayBookings.filter((b) => {
     const matchesSearch =
       b.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -60,19 +66,39 @@ export default function Admin() {
       return;
     }
 
+    const selectedDateObject = new Date(`${selectedDate}T00:00:00`);
+    if (
+      selectedDateObject.getDay() === 1 ||
+      POYA_DATES.has(selectedDate) ||
+      HOLIDAY_DATES.has(selectedDate) ||
+      selectedDate < new Date().toISOString().slice(0, 10)
+    ) {
+      setWalkInError('Walk-in bookings are only allowed on open dates.');
+      setWalkInSubmitting(false);
+      return;
+    }
+
+    const validation = validateBookingData(walkInForm);
+    if (!validation.valid) {
+      setWalkInError(Object.values(validation.errors)[0]);
+      setWalkInSubmitting(false);
+      return;
+    }
+
+    if (walkInForm.serviceType === 'Free Service' && stats.isFreeServiceFull) {
+      setWalkInError('The free-service quota for this date has been reached.');
+      setWalkInSubmitting(false);
+      return;
+    }
+
     try {
-      const nextTokenNo = stats.totalBooked + 1;
       const newBooking = {
-        id: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
-        tokenNo: nextTokenNo,
-        timeSlot: stats.nextSlotTime,
         name: walkInForm.name,
         phone: walkInForm.phone,
         nic: walkInForm.nic,
         bikeModel: walkInForm.bikeModel,
         vehicleNo: walkInForm.vehicleNo,
         serviceType: walkInForm.serviceType,
-        status: 'Pending',
         date: selectedDate
       };
 
