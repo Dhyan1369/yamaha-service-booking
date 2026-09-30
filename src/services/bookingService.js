@@ -93,18 +93,21 @@ export const bookingService = {
 
       const { data, error } = await query;
 
-      if (!error && data) {
-        return data.map(mapBookingFromDb);
+      if (error) {
+        console.error('Supabase fetch failed:', error);
+        throw new Error(`Failed to load bookings from server: ${error.message}`);
       }
-      console.warn('Supabase fetch failed, using local data fallback:', error);
+      return (data || []).map(mapBookingFromDb);
     }
+
+    // Local storage fallback only when Supabase is unconfigured
     const local = getLocalBookings();
     return dateFilter ? local.filter(b => b.date === dateFilter) : local;
   },
 
   async createBooking(bookingData) {
     if (isSupabaseConfigured && supabase) {
-      // 1. Try atomic creation via RPC (Transaction + Row locking to prevent double bookings)
+      // 1. Try atomic creation via RPC (Transaction + Row locking)
       const { data: rpcData, error: rpcError } = await supabase.rpc('create_booking_transaction', {
         p_date: bookingData.date,
         p_name: bookingData.name,
@@ -120,12 +123,18 @@ export const bookingService = {
         return mapBookingFromDb(rpcData);
       }
 
-      // If error was SLOT_FULL or Unique constraint violation, throw directly to user UI
-      if (rpcError && rpcError.message.includes('SLOT_FULL')) {
-        throw new Error('Sorry, all 12 service slots for this date are already fully booked!');
+      // Check specific RPC failure error cases
+      if (rpcError) {
+        if (rpcError.message.includes('SLOT_FULL')) {
+          throw new Error('Sorry, all 12 service slots for this date are already fully booked!');
+        }
+        // If RPC function isn't created yet in database, attempt fallback to table insert
+        if (!rpcError.message.includes('function') && !rpcError.message.includes('does not exist')) {
+          throw new Error(`Booking failed: ${rpcError.message}`);
+        }
       }
 
-      // 2. Fallback to direct insertion if RPC function is not yet created in Supabase
+      // 2. Direct table insertion if RPC is not yet deployed in database
       const dbRow = {
         date: bookingData.date,
         token_no: bookingData.tokenNo,
@@ -151,14 +160,14 @@ export const bookingService = {
       }
 
       if (insertError) {
-        if (insertError.code === '23505') { // Postgres UNIQUE constraint violation code
-          throw new Error('Double booking prevented: This slot or vehicle has already been booked for this date.');
+        if (insertError.code === '23505') { // Postgres UNIQUE constraint violation
+          throw new Error('Double booking prevented: This token or vehicle has already been booked for this date.');
         }
-        console.warn('Supabase insert failed:', insertError);
+        throw new Error(`Server failed to save booking: ${insertError.message}`);
       }
     }
 
-    // Local storage fallback for unconfigured environment
+    // Local storage fallback for unconfigured development environment
     const current = getLocalBookings();
     const updated = [bookingData, ...current];
     saveLocalBookings(updated);
@@ -174,10 +183,14 @@ export const bookingService = {
         .select()
         .single();
 
-      if (!error && data) return mapBookingFromDb(data);
-      console.warn('Supabase update status failed:', error);
+      if (error) {
+        console.error('Supabase update status failed:', error);
+        throw new Error(`Failed to update status on server: ${error.message}`);
+      }
+      return mapBookingFromDb(data);
     }
 
+    // Local storage fallback for unconfigured environment
     const current = getLocalBookings();
     const updated = current.map((b) => (b.id === id ? { ...b, status: newStatus } : b));
     saveLocalBookings(updated);
