@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { User, Phone, Wrench, AlertCircle } from 'lucide-react';
 import Input from '../common/Input';
 import Button from '../common/Button';
@@ -7,17 +7,41 @@ import SlotSelector from './SlotSelector';
 import TokenReceipt from './TokenReceipt';
 import { useAuth } from '../../hooks/useAuth';
 import { useBookings } from '../../hooks/useBookings';
+import { POYA_DATES, HOLIDAY_DATES } from '../../services/bookingService';
+import { validateBookingData } from '../../lib/validation';
 
 export default function BookingForm({ onBookingSuccess, onCancel }) {
   const { user, openAuthModal } = useAuth();
-  const { addBooking, getSlotStats } = useBookings();
+  const { addBooking, getSlotStats, refreshAvailability } = useBookings();
 
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [bikeModel, setBikeModel] = useState(user?.bikeModel || 'Yamaha FZ-S V3');
   const [vehicleNo, setVehicleNo] = useState('');
   const [serviceType, setServiceType] = useState('Free Service');
-  const [date, setDate] = useState('2026-09-30');
+  const [date, setDate] = useState(() => {
+    // Find the next valid open day from today onward
+    const candidate = new Date();
+    // Try up to 14 days ahead to find an open day
+    for (let i = 0; i < 14; i++) {
+      const y = candidate.getFullYear();
+      const m = String(candidate.getMonth() + 1).padStart(2, '0');
+      const d = String(candidate.getDate()).padStart(2, '0');
+      const key = `${y}-${m}-${d}`;
+      const dow = candidate.getDay(); // 0=Sun, 1=Mon
+      if (dow !== 1 && !POYA_DATES.has(key) && !HOLIDAY_DATES.has(key)) {
+        return key;
+      }
+      candidate.setDate(candidate.getDate() + 1);
+    }
+    // Fallback: tomorrow
+    const tmr = new Date();
+    tmr.setDate(tmr.getDate() + 1);
+    const y = tmr.getFullYear();
+    const m = String(tmr.getMonth() + 1).padStart(2, '0');
+    const d = String(tmr.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
 
   const [createdBooking, setCreatedBooking] = useState(null);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -32,12 +56,57 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
   // Slot statistics for the currently selected date in the form
   const stats = getSlotStats(date);
 
+  useEffect(() => {
+    refreshAvailability(date);
+  }, [date, refreshAvailability]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
 
     if (!user) {
       openAuthModal();
+      return;
+    }
+
+    // Guard: reject past dates (in case of any bypass)
+    const todayObj2 = new Date();
+    const todayKey2 = `${todayObj2.getFullYear()}-${String(todayObj2.getMonth() + 1).padStart(2, '0')}-${String(todayObj2.getDate()).padStart(2, '0')}`;
+    if (date < todayKey2) {
+      setErrorMessage('Cannot book a past date. Please select today or a future date.');
+      return;
+    }
+
+    // Check Monday closure (getDay === 1)
+    const dateParts = date.split('-');
+    if (dateParts.length === 3) {
+      const targetDateObj = new Date(parseInt(dateParts[0], 10), parseInt(dateParts[1], 10) - 1, parseInt(dateParts[2], 10));
+      if (targetDateObj.getDay() === 1) {
+        setErrorMessage('Samawenna! සඳුදා (Monday) දිනවල සේවා මධ්‍යස්ථානය වසා ඇත. කරුණාකර වෙනත් දිනයක් තෝරන්න.');
+        return;
+      }
+    }
+
+    // Check Poya Day closure
+    if (POYA_DATES.has(date)) {
+      setErrorMessage('Samawenna! පෝය (Poya) දිනවල සේවා මධ්‍යස්ථානය වසා ඇත. කරුණාකර වෙනත් දිනයක් තෝරන්න.');
+      return;
+    }
+
+    if (HOLIDAY_DATES.has(date)) {
+      setErrorMessage('Samawenna! රජයේ ප්‍රසිද්ධ නිවාඩු දිනවල සේවා මධ්‍යස්ථානය වසා ඇත. කරුණාකර වෙනත් දිනයක් තෝරන්න.');
+      return;
+    }
+
+    const validation = validateBookingData({
+      name: customerName,
+      phone: customerPhone,
+      bikeModel: selectedBikeModel,
+      vehicleNo,
+      serviceType
+    });
+    if (!validation.valid) {
+      setErrorMessage(Object.values(validation.errors)[0]);
       return;
     }
 
@@ -55,19 +124,15 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
 
     try {
       setSubmitting(true);
-      const nextTokenNo = stats.totalBooked + 1;
       const newBooking = {
-        id: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
-        tokenNo: nextTokenNo,
-        timeSlot: stats.nextSlotTime,
         name: customerName,
         phone: customerPhone,
         nic: user.nic || 'N/A',
         bikeModel: selectedBikeModel,
         vehicleNo,
         serviceType,
-        status: 'Pending',
-        date
+        date,
+        userId: user.id || null
       };
 
       const result = await addBooking(newBooking);
@@ -207,3 +272,4 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
     </>
   );
 }
+

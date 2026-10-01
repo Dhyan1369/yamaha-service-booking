@@ -1,30 +1,41 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShieldCheck, 
   ChevronRight, Wrench, Sparkles, Award, Zap
 } from 'lucide-react';
-import Modal from '../components/common/Modal';
-import BookingForm from '../components/booking/BookingForm';
 import { useAuth } from '../hooks/useAuth';
 import { useBookings } from '../hooks/useBookings';
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user, openAuthModal } = useAuth();
+  const { user } = useAuth();
   const { getSlotStats } = useBookings();
-  const [showBookingModal, setShowBookingModal] = useState(false);
 
   // Today's stats
-  const todayKey = '2026-09-30';
+  const todayObj = new Date();
+  const year = todayObj.getFullYear();
+  const month = String(todayObj.getMonth() + 1).padStart(2, '0');
+  const day = String(todayObj.getDate()).padStart(2, '0');
+  const todayKey = `${year}-${month}-${day}`;
+
   const todayStats = getSlotStats(todayKey);
 
   const handleOpenBooking = () => {
-    if (!user) {
-      openAuthModal();
+    // If logged-in user is an Admin, redirect to Admin Workshop Dashboard
+    if (user?.isAdmin) {
+      navigate('/admin');
       return;
     }
-    setShowBookingModal(true);
+    navigate('/booking');
+  };
+
+  const handleViewSlots = () => {
+    // If logged-in user is an Admin, navigate directly to Admin Control
+    if (user?.isAdmin) {
+      navigate('/admin');
+    } else {
+      navigate('/booking');
+    }
   };
 
   return (
@@ -54,15 +65,15 @@ export default function Home() {
               className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-lg rounded-2xl shadow-xl shadow-blue-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-3"
             >
               <Wrench className="w-5 h-5" />
-              Book a Service Now
+              {user?.isAdmin ? 'Manage Admin Dashboard' : 'Book a Service Now'}
               <ChevronRight className="w-5 h-5" />
             </button>
 
             <button
-              onClick={() => navigate('/booking')}
+              onClick={handleViewSlots}
               className="w-full sm:w-auto px-6 py-4 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-200 font-semibold text-base rounded-2xl transition"
             >
-              View Available Slots
+              {user?.isAdmin ? 'View Admin Queue' : 'View Available Slots'}
             </button>
           </div>
 
@@ -111,7 +122,7 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-12">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-            Why Choose Yamaha Authorized Technical Care?
+            Why Choose Manju Yamaha Service, Kamburupitiya?
           </h2>
           <p className="text-slate-400 text-sm mt-2">
             Specially trained technicians with certified diagnostic tools and genuine parts.
@@ -151,18 +162,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Booking Modal */}
-      <Modal
-        isOpen={showBookingModal}
-        onClose={() => setShowBookingModal(false)}
-        title="Book Service Token"
-        subtitle="Service slot එකක් වෙන්කරවා ගැනීමට විස්තර තහවුරු කරන්න."
-      >
-        <BookingForm
-          onBookingSuccess={() => setShowBookingModal(false)}
-          onCancel={() => setShowBookingModal(false)}
-        />
-      </Modal>
     </div>
   );
 }
+

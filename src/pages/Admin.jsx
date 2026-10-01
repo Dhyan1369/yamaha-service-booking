@@ -1,15 +1,44 @@
-import { useState } from 'react';
-import { ShieldCheck, Search, Calendar } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ShieldCheck, Search, Calendar, PlusCircle, Wrench, User, Phone, Bike, CreditCard, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { useBookings } from '../hooks/useBookings';
+import Input from '../components/common/Input';
+import Button from '../components/common/Button';
+import Modal from '../components/common/Modal';
+import { HOLIDAY_DATES, POYA_DATES } from '../services/bookingService';
+import { validateBookingData } from '../lib/validation';
 
 export default function Admin() {
-  const { updateStatus, getSlotStats } = useBookings();
-  const [selectedDate, setSelectedDate] = useState('2026-09-30');
+  const { updateStatus, getSlotStats, addBooking, refreshAvailability } = useBookings();
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showWalkInModal, setShowWalkInModal] = useState(false);
+  const [walkInSubmitting, setWalkInSubmitting] = useState(false);
+  const [walkInError, setWalkInError] = useState('');
+
+  // Form state for Walk-In / Phone-in booking
+  const [walkInForm, setWalkInForm] = useState({
+    name: '',
+    phone: '',
+    nic: 'Walk-in',
+    bikeModel: 'Yamaha FZ-S V3',
+    vehicleNo: '',
+    serviceType: 'Full Service'
+  });
 
   const stats = getSlotStats(selectedDate);
   const dayBookings = stats.dayBookings;
+
+  useEffect(() => {
+    refreshAvailability(selectedDate);
+  }, [selectedDate, refreshAvailability]);
 
   const filteredBookings = dayBookings.filter((b) => {
     const matchesSearch =
@@ -26,44 +55,126 @@ export default function Admin() {
     await updateStatus(id, newStatus);
   };
 
+  const handleWalkInSubmit = async (e) => {
+    e.preventDefault();
+    setWalkInError('');
+    setWalkInSubmitting(true);
+
+    if (stats.isDayFull) {
+      setWalkInError(`Cannot book: Maximum 12 daily slots reached for ${selectedDate}.`);
+      setWalkInSubmitting(false);
+      return;
+    }
+
+    const selectedDateObject = new Date(`${selectedDate}T00:00:00`);
+    if (
+      selectedDateObject.getDay() === 1 ||
+      POYA_DATES.has(selectedDate) ||
+      HOLIDAY_DATES.has(selectedDate) ||
+      selectedDate < new Date().toISOString().slice(0, 10)
+    ) {
+      setWalkInError('Walk-in bookings are only allowed on open dates.');
+      setWalkInSubmitting(false);
+      return;
+    }
+
+    const validation = validateBookingData(walkInForm);
+    if (!validation.valid) {
+      setWalkInError(Object.values(validation.errors)[0]);
+      setWalkInSubmitting(false);
+      return;
+    }
+
+    if (walkInForm.serviceType === 'Free Service' && stats.isFreeServiceFull) {
+      setWalkInError('The free-service quota for this date has been reached.');
+      setWalkInSubmitting(false);
+      return;
+    }
+
+    try {
+      const newBooking = {
+        name: walkInForm.name,
+        phone: walkInForm.phone,
+        nic: walkInForm.nic,
+        bikeModel: walkInForm.bikeModel,
+        vehicleNo: walkInForm.vehicleNo,
+        serviceType: walkInForm.serviceType,
+        date: selectedDate
+      };
+
+      await addBooking(newBooking);
+      setShowWalkInModal(false);
+      setWalkInForm({
+        name: '',
+        phone: '',
+        nic: 'Walk-in',
+        bikeModel: 'Yamaha FZ-S V3',
+        vehicleNo: '',
+        serviceType: 'Full Service'
+      });
+    } catch (err) {
+      setWalkInError(err.message || 'Failed to create walk-in booking');
+    } finally {
+      setWalkInSubmitting(false);
+    }
+  };
+
   const completedCount = dayBookings.filter((b) => b.status === 'Completed').length;
   const inServiceCount = dayBookings.filter((b) => b.status === 'In-Service').length;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Header Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
-            <ShieldCheck className="w-7 h-7 text-blue-500" /> Admin Service Dashboard
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">Manage real-time workshop queue, slot limits, and service updates</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
+              <ShieldCheck className="w-8 h-8 text-blue-500" /> Admin Workshop Control
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/30">
+              STAFF PORTAL
+            </span>
+          </div>
+          <p className="text-sm text-slate-400 mt-1">
+            Real-time queue monitoring, walk-in token generation, and service progress tracking
+          </p>
         </div>
 
-        {/* Date Selector */}
-        <div className="flex items-center gap-3">
-          <label className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
-            <Calendar className="w-4 h-4 text-blue-400" /> Date:
-          </label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="bg-slate-900 border border-slate-800 text-white text-sm rounded-xl px-3.5 py-2 outline-none focus:border-blue-500 font-mono"
-          />
+        {/* Date Selector & Action Button */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl">
+            <Calendar className="w-4 h-4 text-blue-400" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-transparent text-white text-sm outline-none font-mono"
+            />
+          </div>
+
+          <Button
+            variant="primary"
+            onClick={() => setShowWalkInModal(true)}
+            className="flex items-center gap-2"
+          >
+            <PlusCircle className="w-4 h-4" /> + Walk-In Booking
+          </Button>
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Total Bookings Today</p>
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wider">Today's Tokens</span>
+            <Clock className="w-4 h-4 text-blue-400" />
+          </div>
           <div className="flex items-baseline justify-between mt-2">
             <p className="text-3xl font-black text-white">
               {stats.totalBooked} <span className="text-sm font-normal text-slate-500">/ {stats.maxDailySlots}</span>
             </p>
             <span className="text-xs font-bold text-blue-400">
-              {Math.round((stats.totalBooked / stats.maxDailySlots) * 100)}%
+              {Math.round((stats.totalBooked / stats.maxDailySlots) * 100)}% Capacity
             </span>
           </div>
           <div className="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
@@ -75,7 +186,10 @@ export default function Admin() {
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Free Service Quota</p>
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wider">Free Service Quota</span>
+            <Wrench className="w-4 h-4 text-indigo-400" />
+          </div>
           <div className="flex items-baseline justify-between mt-2">
             <p className="text-3xl font-black text-white">
               {stats.freeServices} <span className="text-sm font-normal text-slate-500">/ {stats.maxFreeServices}</span>
@@ -85,7 +199,7 @@ export default function Admin() {
                 stats.isFreeServiceFull ? 'text-red-400' : 'text-green-400'
               }`}
             >
-              {stats.isFreeServiceFull ? 'Limit Reached' : `${stats.availableFreeSlots} Slots Left`}
+              {stats.isFreeServiceFull ? 'Quota Full' : `${stats.availableFreeSlots} Left`}
             </span>
           </div>
           <div className="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
@@ -97,15 +211,20 @@ export default function Admin() {
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Completed / In-Service</p>
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wider">Workshop Progress</span>
+            <CheckCircle2 className="w-4 h-4 text-green-400" />
+          </div>
           <div className="flex items-baseline justify-between mt-2">
             <p className="text-3xl font-black text-green-400">
               {completedCount} <span className="text-sm font-normal text-amber-400">({inServiceCount} Active)</span>
             </p>
-            <span className="text-xs font-bold text-slate-400">Workshop Progress</span>
+            <span className="text-xs font-bold text-slate-400">
+              {stats.totalBooked > 0 ? Math.round((completedCount / stats.totalBooked) * 100) : 0}% Done
+            </span>
           </div>
           <p className="text-[11px] text-slate-500 mt-3">
-            {stats.totalBooked - completedCount} pending completion for {selectedDate}
+            {stats.totalBooked - completedCount} bikes pending service for {selectedDate}
           </p>
         </div>
       </div>
@@ -114,9 +233,9 @@ export default function Admin() {
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h3 className="font-bold text-white text-base">Booked Service Queue</h3>
+            <h3 className="font-bold text-white text-base">Service Tokens ({selectedDate})</h3>
             <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 text-xs font-mono font-semibold">
-              {filteredBookings.length} Tokens
+              {filteredBookings.length} Total Tokens
             </span>
           </div>
 
@@ -125,7 +244,7 @@ export default function Admin() {
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Search customer, phone, model..."
+                placeholder="Search name, phone, plate..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 text-xs rounded-xl pl-9 pr-3 py-2 text-white outline-none focus:border-blue-500"
@@ -150,13 +269,13 @@ export default function Admin() {
           <table className="w-full text-left text-sm text-slate-300 min-w-[720px]">
             <thead className="bg-slate-950 text-slate-400 text-xs uppercase tracking-wider font-semibold">
               <tr>
-                <th className="px-6 py-3.5">Token</th>
+                <th className="px-6 py-3.5">Token #</th>
                 <th className="px-6 py-3.5">Time Slot</th>
                 <th className="px-6 py-3.5">Customer & Phone</th>
                 <th className="px-6 py-3.5">Bike Model</th>
-                <th className="px-6 py-3.5">Vehicle Plate</th>
-                <th className="px-6 py-3.5">Service Type</th>
-                <th className="px-6 py-3.5">Status Update</th>
+                <th className="px-6 py-3.5">Plate No</th>
+                <th className="px-6 py-3.5">Type</th>
+                <th className="px-6 py-3.5">Update Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900">
@@ -189,7 +308,15 @@ export default function Admin() {
                     <select
                       value={item.status}
                       onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                      className="bg-slate-950 border border-slate-700 text-xs rounded-lg px-2.5 py-1 text-white outline-none focus:border-blue-500"
+                      className={`text-xs rounded-lg px-2.5 py-1 text-white outline-none border font-semibold ${
+                        item.status === 'Completed'
+                          ? 'bg-green-950 border-green-800 text-green-300'
+                          : item.status === 'In-Service'
+                          ? 'bg-amber-950 border-amber-800 text-amber-300'
+                          : item.status === 'Cancelled'
+                          ? 'bg-red-950 border-red-800 text-red-300'
+                          : 'bg-slate-950 border-slate-700 text-slate-300'
+                      }`}
                     >
                       <option value="Pending">Pending</option>
                       <option value="In-Service">In-Service</option>
@@ -202,7 +329,7 @@ export default function Admin() {
               {filteredBookings.length === 0 && (
                 <tr>
                   <td colSpan="7" className="text-center py-12 text-slate-500 text-sm">
-                    No bookings found matching criteria for {selectedDate}.
+                    No service tokens found for {selectedDate}.
                   </td>
                 </tr>
               )}
@@ -210,6 +337,95 @@ export default function Admin() {
           </table>
         </div>
       </div>
+
+      {/* Walk-in Booking Modal */}
+      <Modal
+        isOpen={showWalkInModal}
+        onClose={() => setShowWalkInModal(false)}
+        title="Issue Walk-In / Phone Token"
+        subtitle={`Generate a token for ${selectedDate}`}
+      >
+        <form onSubmit={handleWalkInSubmit} className="space-y-4">
+          {walkInError && (
+            <div className="p-3 bg-red-950/60 border border-red-800 text-red-300 rounded-xl text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{walkInError}</span>
+            </div>
+          )}
+
+          <Input
+            label="Customer Name"
+            icon={User}
+            required
+            placeholder="e.g. Kasun Kalhara"
+            value={walkInForm.name}
+            onChange={(e) => setWalkInForm({ ...walkInForm, name: e.target.value })}
+          />
+
+          <Input
+            label="Customer Phone"
+            icon={Phone}
+            type="tel"
+            required
+            placeholder="e.g. 0771234567"
+            value={walkInForm.phone}
+            onChange={(e) => setWalkInForm({ ...walkInForm, phone: e.target.value })}
+          />
+
+          <Input
+            label="Bike Model"
+            icon={Bike}
+            required
+            placeholder="e.g. Yamaha FZ-S V3"
+            value={walkInForm.bikeModel}
+            onChange={(e) => setWalkInForm({ ...walkInForm, bikeModel: e.target.value })}
+          />
+
+          <Input
+            label="Vehicle Plate Number"
+            icon={CreditCard}
+            required
+            placeholder="e.g. BAP-4521"
+            value={walkInForm.vehicleNo}
+            onChange={(e) => setWalkInForm({ ...walkInForm, vehicleNo: e.target.value })}
+          />
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+              Service Type
+            </label>
+            <select
+              value={walkInForm.serviceType}
+              onChange={(e) => setWalkInForm({ ...walkInForm, serviceType: e.target.value })}
+              className="w-full bg-slate-950 border border-slate-800 text-white text-sm rounded-xl px-3.5 py-2.5 outline-none focus:border-blue-500"
+            >
+              <option value="Full Service">Full Service</option>
+              <option value="Free Service">Free Service</option>
+              <option value="Normal Service">Normal Service</option>
+            </select>
+          </div>
+
+          <div className="flex gap-3 pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => setShowWalkInModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={walkInSubmitting || stats.isDayFull}
+              className="flex-1"
+            >
+              {walkInSubmitting ? 'Generating...' : 'Issue Token'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
+

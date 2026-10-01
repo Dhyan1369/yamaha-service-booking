@@ -56,7 +56,7 @@ export default function TokenReceipt({ isOpen, onClose, booking }) {
           </div>
 
           <div className="mt-3 pt-2 text-[10px] text-slate-500 text-center flex items-center justify-center gap-1">
-            <ShieldCheck className="w-3 h-3 text-green-500" /> Yamaha Authorized Service Workshop
+            <ShieldCheck className="w-3 h-3 text-green-500" /> Manju Yamaha Service Workshop
           </div>
         </div>
 

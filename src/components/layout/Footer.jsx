@@ -13,11 +13,11 @@ export default function Footer() {
                 <Bike className="w-5 h-5 text-white" />
               </div>
               <span className="font-black text-base tracking-wider">
-                YAMAHA <span className="text-red-500">PRO</span>
+                Manju <span className="text-red-500">Yamaha</span>
               </span>
             </div>
             <p className="text-slate-400 leading-relaxed">
-              Authorized Technical Workshop specializing in high precision Yamaha two-wheeler maintenance and repair.
+              Authorized Yamaha service center in Kamburupitiya, specializing in high-precision two-wheeler maintenance and repair.
             </p>
           </div>
 
@@ -51,18 +51,18 @@ export default function Footer() {
             <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-1.5">
               <MapPin className="w-4 h-4 text-red-500" /> Service Center
             </h4>
-            <p className="mb-2">No. 142, High Level Road, Colombo, Sri Lanka</p>
+            <p className="mb-2">Kamburupitiya, Sri Lanka</p>
             <p className="flex items-center gap-1 text-slate-300 font-mono">
               <Phone className="w-3.5 h-3.5 text-blue-400" /> +94 11 234 5678 / +94 77 123 4567
             </p>
             <div className="mt-3 inline-flex items-center gap-1 text-green-400 text-[11px] font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5" /> 100% Genuine Yamaha Yamalube & Parts
+              <ShieldCheck className="w-3.5 h-3.5" /> 100% Genuine Yamaha Yamalube &amp; Parts
             </div>
           </div>
         </div>
 
         <div className="border-t border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between text-slate-500 gap-2">
-          <p>© {new Date().getFullYear()} Yamaha Pro Service Booking System. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Manju Yamaha Service, Kamburupitiya. All rights reserved.</p>
           <p className="text-slate-500 text-[11px]">දිනකට උපරිම ටෝකන් 12ක් පමණි (General: 12, Free: 5)</p>
         </div>
       </div>

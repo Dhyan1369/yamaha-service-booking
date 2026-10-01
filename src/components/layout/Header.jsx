@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Bike, LogOut, Menu } from 'lucide-react';
+import { Bike, LogOut, Menu, Shield } from 'lucide-react';
 import Button from '../common/Button';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -9,9 +9,9 @@ export default function Header({ onOpenSidebar }) {
 
   const navLinks = [
     { name: 'Home', path: '/' },
-    { name: 'Book Service', path: '/booking' },
-    ...(user ? [{ name: 'My Dashboard', path: '/dashboard' }] : []),
-    { name: 'Admin Portal', path: '/admin' }
+    ...(!user?.isAdmin ? [{ name: 'Book Service', path: '/booking' }] : []),
+    ...(user && !user.isAdmin ? [{ name: 'My Dashboard', path: '/dashboard' }] : []),
+    ...(user?.isAdmin ? [{ name: 'Admin Dashboard', path: '/admin' }] : []),
   ];
 
   return (
@@ -24,9 +24,9 @@ export default function Header({ onOpenSidebar }) {
           </div>
           <div>
             <span className="text-xl font-black tracking-wider text-white flex items-center gap-1.5">
-              YAMAHA <span className="text-red-500">PRO</span> SERVICE
+              MANJU <span className="text-red-500">YAMAHA</span> SERVICE
             </span>
-            <p className="text-xs text-slate-400 font-medium">Authorized Technical Workshop</p>
+            <p className="text-xs text-slate-400 font-medium">Kamburupitiya Service Center</p>
           </div>
         </Link>
 
@@ -55,8 +55,15 @@ export default function Header({ onOpenSidebar }) {
           {user ? (
             <div className="flex items-center space-x-3 bg-slate-800/70 border border-slate-700/60 rounded-xl px-3 py-1.5">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-white leading-tight">{user.name}</p>
-                <p className="text-[11px] text-blue-400 font-mono">{user.phone}</p>
+                <div className="flex items-center justify-end gap-1.5">
+                  <p className="text-sm font-semibold text-white leading-tight">{user.name}</p>
+                  {user.isAdmin && (
+                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 flex items-center gap-0.5">
+                      <Shield className="w-2.5 h-2.5" /> ADMIN
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-blue-400 font-mono">{user.email || user.phone}</p>
               </div>
               <button
                 type="button"
@@ -92,3 +99,4 @@ export default function Header({ onOpenSidebar }) {
     </header>
   );
 }
+

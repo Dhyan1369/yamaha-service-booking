@@ -1,0 +1,159 @@
+-- Booking security and atomic allocation for Supabase.
+-- Apply this migration in the Supabase SQL editor before enabling production bookings.
+
+create table if not exists public.bookings (
+  id uuid primary key default gen_random_uuid(),
+  token_no integer not null,
+  time_slot text not null,
+  name text not null,
+  phone text not null,
+  nic text not null,
+  bike_model text not null,
+  vehicle_no text not null,
+  service_type text not null,
+  status text not null default 'Pending',
+  date date not null,
+  user_id uuid references auth.users(id),
+  created_at timestamptz not null default now(),
+  constraint bookings_service_type_check check (service_type in ('Free Service', 'Full Service', 'Normal Service')),
+  constraint bookings_status_check check (status in ('Pending', 'In-Service', 'Completed', 'Cancelled')),
+  constraint bookings_token_check check (token_no between 1 and 12),
+  constraint bookings_phone_check check (phone ~ '^0[0-9]{9}$'),
+  constraint bookings_date_token_unique unique (date, token_no),
+  constraint bookings_date_vehicle_unique unique (date, vehicle_no)
+);
+
+create index if not exists bookings_user_id_idx on public.bookings(user_id);
+create index if not exists bookings_date_idx on public.bookings(date);
+
+alter table public.bookings enable row level security;
+
+revoke all on public.bookings from anon, authenticated;
+grant select on public.bookings to authenticated;
+
+drop policy if exists bookings_select_policy on public.bookings;
+create policy bookings_select_policy on public.bookings
+  for select to authenticated
+  using (
+    user_id = auth.uid()
+    or coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin'
+  );
+
+drop policy if exists bookings_admin_update_policy on public.bookings;
+create policy bookings_admin_update_policy on public.bookings
+  for update to authenticated
+  using (coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin')
+  with check (coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin');
+
+create or replace function public.get_booking_availability(p_date date)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  total_booked integer;
+  free_services integer;
+begin
+  if auth.uid() is null then
+    raise exception 'AUTH_REQUIRED';
+  end if;
+
+  select count(*) filter (where status <> 'Cancelled'),
+         count(*) filter (where service_type = 'Free Service' and status <> 'Cancelled')
+    into total_booked, free_services
+    from public.bookings
+   where date = p_date;
+
+  return jsonb_build_object(
+    'totalBooked', total_booked,
+    'freeServices', free_services,
+    'availableSlots', greatest(0, 12 - total_booked),
+    'availableFreeSlots', greatest(0, 5 - free_services),
+    'maxDailySlots', 12,
+    'maxFreeServices', 5
+  );
+end;
+$$;
+
+grant execute on function public.get_booking_availability(date) to authenticated;
+
+create or replace function public.create_booking_transaction(
+  p_date date,
+  p_name text,
+  p_phone text,
+  p_nic text,
+  p_bike_model text,
+  p_vehicle_no text,
+  p_service_type text,
+  p_user_id uuid default null
+)
+returns public.bookings
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  next_token integer;
+  created_booking public.bookings;
+  total_booked integer;
+  free_services integer;
+  is_admin boolean := coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin';
+  booking_user_id uuid := auth.uid();
+begin
+  if auth.uid() is null then
+    raise exception 'AUTH_REQUIRED';
+  end if;
+
+  if p_date < current_date then
+    raise exception 'PAST_DATE';
+  end if;
+  if extract(isodow from p_date) = 1 then
+    raise exception 'CLOSED_DATE';
+  end if;
+  if p_name is null or length(trim(p_name)) = 0
+     or p_bike_model is null or length(trim(p_bike_model)) = 0
+     or p_vehicle_no is null or length(trim(p_vehicle_no)) = 0
+     or p_phone !~ '^0[0-9]{9}$' then
+    raise exception 'INVALID_BOOKING_DATA';
+  end if;
+  if p_service_type not in ('Free Service', 'Full Service', 'Normal Service') then
+    raise exception 'INVALID_SERVICE_TYPE';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_date::text));
+
+  select count(*) filter (where status <> 'Cancelled'),
+         count(*) filter (where service_type = 'Free Service' and status <> 'Cancelled')
+    into total_booked, free_services
+    from public.bookings
+   where date = p_date;
+
+  if total_booked >= 12 then
+    raise exception 'SLOT_FULL';
+  end if;
+  if p_service_type = 'Free Service' and free_services >= 5 then
+    raise exception 'FREE_SERVICE_FULL';
+  end if;
+
+  next_token := total_booked + 1;
+
+  insert into public.bookings (
+    token_no, time_slot, name, phone, nic, bike_model, vehicle_no,
+    service_type, status, date, user_id
+  ) values (
+    next_token,
+    to_char((time '08:30' + ((next_token - 1) * interval '45 minutes'))::time, 'HH12:MI AM'),
+    trim(p_name), regexp_replace(p_phone, '[[:space:]-]', '', 'g'), upper(trim(coalesce(p_nic, 'N/A'))),
+    trim(p_bike_model), upper(trim(p_vehicle_no)), p_service_type, 'Pending', p_date, booking_user_id
+  ) returning * into created_booking;
+
+  return created_booking;
+exception
+  when unique_violation then
+    raise exception 'DUPLICATE_BOOKING';
+end;
+$$;
+
+revoke all on function public.create_booking_transaction(date, text, text, text, text, text, text, uuid) from public, anon;
+grant execute on function public.create_booking_transaction(date, text, text, text, text, text, text, uuid) to authenticated;

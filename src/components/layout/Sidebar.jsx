@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { X, Bike, Home, Calendar, User, ShieldCheck, LogOut, LogIn } from 'lucide-react';
+import { X, Bike, Home, User, ShieldCheck, LogOut, LogIn } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import Button from '../common/Button';
 
@@ -11,9 +11,9 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const links = [
     { name: 'Home', path: '/', icon: Home },
-    { name: 'Book Service', path: '/booking', icon: Calendar },
-    ...(user ? [{ name: 'My Dashboard', path: '/dashboard', icon: User }] : []),
-    { name: 'Admin Portal', path: '/admin', icon: ShieldCheck }
+    ...(!user || !user.isAdmin ? [{ name: 'Book Service', path: '/booking', icon: User }] : []),
+    ...(user && !user.isAdmin ? [{ name: 'My Dashboard', path: '/dashboard', icon: User }] : []),
+    ...(user?.isAdmin ? [{ name: 'Admin Dashboard', path: '/admin', icon: ShieldCheck }] : [])
   ];
 
   return (
@@ -34,7 +34,7 @@ export default function Sidebar({ isOpen, onClose }) {
               <div className="bg-blue-600 p-1.5 rounded-lg">
                 <Bike className="w-5 h-5 text-white" />
               </div>
-              <span className="font-bold text-white text-sm">Yamaha Pro</span>
+              <span className="font-bold text-white text-sm">Manju Yamaha Service</span>
             </div>
             <button
               onClick={onClose}
@@ -49,7 +49,7 @@ export default function Sidebar({ isOpen, onClose }) {
             <div className="my-4 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
               <p className="text-xs text-slate-400">Signed in as</p>
               <p className="text-sm font-bold text-white truncate">{user.name}</p>
-              <p className="text-xs text-blue-400 font-mono">{user.phone}</p>
+              <p className="text-xs text-blue-400 font-mono">{user.email || user.phone}</p>
             </div>
           ) : (
             <div className="my-4">

@@ -1,15 +1,13 @@
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, Bike, Phone, CreditCard, Wrench, Calendar } from 'lucide-react';
 import Button from '../components/common/Button';
-import Modal from '../components/common/Modal';
-import BookingForm from '../components/booking/BookingForm';
 import { useAuth } from '../hooks/useAuth';
 import { useBookings } from '../hooks/useBookings';
 
 export default function UserDashboard() {
   const { user, openAuthModal } = useAuth();
   const { getUserBookings } = useBookings();
-  const [showBookingModal, setShowBookingModal] = useState(false);
+  const navigate = useNavigate();
 
   if (!user) {
     return (
@@ -28,7 +26,8 @@ export default function UserDashboard() {
     );
   }
 
-  const customerBookings = getUserBookings(user.phone);
+  // Immediately query bookings for logged-in user object (id, phone, nic)
+  const customerBookings = getUserBookings(user);
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -48,24 +47,30 @@ export default function UserDashboard() {
       {/* Top Profile Summary */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-lg">
         <div className="flex items-center space-x-4">
-          <div className="w-14 h-14 bg-blue-600/20 border border-blue-500/30 rounded-2xl flex items-center justify-center text-blue-400 font-black text-xl">
-            {user.name.charAt(0)}
+          <div className="w-14 h-14 bg-blue-600/20 border border-blue-500/30 rounded-2xl flex items-center justify-center text-blue-400 font-black text-xl uppercase">
+            {(user.name || 'C').charAt(0)}
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-blue-400 font-bold mb-0.5">Customer Dashboard</p>
             <h1 className="text-2xl font-extrabold text-white">ආයුබෝවන්, {user.name}</h1>
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-1">
-              <span className="flex items-center gap-1">
-                <Phone className="w-3.5 h-3.5 text-slate-500" /> {user.phone}
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <CreditCard className="w-3.5 h-3.5 text-slate-500" /> NIC: {user.nic}
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <Bike className="w-3.5 h-3.5 text-slate-500" /> {user.bikeModel}
-              </span>
+              {user.phone && (
+                <span className="flex items-center gap-1">
+                  <Phone className="w-3.5 h-3.5 text-slate-500" /> {user.phone}
+                </span>
+              )}
+              {user.phone && user.nic && <span>•</span>}
+              {user.nic && (
+                <span className="flex items-center gap-1">
+                  <CreditCard className="w-3.5 h-3.5 text-slate-500" /> NIC: {user.nic}
+                </span>
+              )}
+              {user.bikeModel && <span>•</span>}
+              {user.bikeModel && (
+                <span className="flex items-center gap-1">
+                  <Bike className="w-3.5 h-3.5 text-slate-500" /> {user.bikeModel}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -74,7 +79,7 @@ export default function UserDashboard() {
           variant="primary"
           size="md"
           icon={Wrench}
-          onClick={() => setShowBookingModal(true)}
+          onClick={() => navigate('/booking')}
         >
           Book a Service
         </Button>
@@ -140,25 +145,13 @@ export default function UserDashboard() {
               <p className="font-bold text-white text-base">ඔබට තවම service booking නොමැත.</p>
               <p className="text-xs text-slate-400 mt-1">ඔබගේ ප්‍රථම සේවා වාරය වෙන්කරවා ගැනීමට පහත බොත්තම ඔබන්න.</p>
             </div>
-            <Button variant="primary" size="sm" onClick={() => setShowBookingModal(true)}>
+            <Button variant="primary" size="sm" onClick={() => navigate('/booking')}>
               Book Service Now
             </Button>
           </div>
         )}
       </div>
 
-      {/* Booking Modal */}
-      <Modal
-        isOpen={showBookingModal}
-        onClose={() => setShowBookingModal(false)}
-        title="Book Service Token"
-        subtitle="Service slot එකක් වෙන්කරවා ගැනීමට විස්තර තහවුරු කරන්න."
-      >
-        <BookingForm
-          onBookingSuccess={() => setShowBookingModal(false)}
-          onCancel={() => setShowBookingModal(false)}
-        />
-      </Modal>
     </div>
   );
 }

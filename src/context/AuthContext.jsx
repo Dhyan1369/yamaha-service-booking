@@ -1,52 +1,120 @@
 import { createContext, useState, useEffect } from 'react';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext(null);
 
-const AUTH_STORAGE_KEY = 'yamaha_auth_user';
-
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem(AUTH_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-
+  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(isSupabaseConfigured);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  useEffect(() => {
-    try {
-      if (user) {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-      } else {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-      }
-    } catch (err) {
-      console.error('Failed to update localStorage with user:', err);
-    }
-  }, [user]);
+  const formatUser = (sbUser, customMeta = {}) => {
+    if (!sbUser) return null;
+    const meta = { ...(sbUser.user_metadata || {}), ...customMeta };
+    const appMeta = sbUser.app_metadata || {};
+    const isAdmin = appMeta.role === 'admin';
 
-  const login = (userData) => {
-    setUser(userData);
-    setShowAuthModal(false);
-  };
-
-  const googleLogin = () => {
-    const googleUser = {
-      name: 'Charith Fernando',
-      nic: '984521098V',
-      phone: '0778901234',
-      bikeModel: 'Yamaha MT-15',
-      method: 'Google Account'
+    return {
+      id: sbUser.id,
+      email: sbUser.email || '',
+      name: meta.full_name || meta.name || sbUser.email?.split('@')[0] || 'Customer',
+      nic: meta.nic || '',
+      phone: meta.phone || '',
+      bikeModel: meta.bikeModel || meta.bike_model || 'Yamaha Bike',
+      isAdmin: Boolean(isAdmin),
+      rawUser: sbUser
     };
-    login(googleUser);
   };
 
-  const logout = () => {
+  useEffect(() => {
+    if (isSupabaseConfigured && supabase) {
+      // 1. Fetch active session on initial load
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        setUser(formatUser(session?.user));
+        setLoading(false);
+      });
+
+      // 2. Listen to real-time auth changes
+      const {
+        data: { subscription }
+      } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session);
+        setUser(formatUser(session?.user));
+        setLoading(false);
+      });
+
+      return () => subscription.unsubscribe();
+    }
+  }, []);
+
+  const loginWithEmailPassword = async (email, password) => {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      if (error) throw error;
+      return data;
+    }
+    throw new Error('Supabase is not configured yet. Please check your .env.local file.');
+  };
+
+  const signUpWithEmailPassword = async (email, password, userMetaData = {}) => {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: userMetaData.name,
+            nic: userMetaData.nic,
+            phone: userMetaData.phone,
+            bikeModel: userMetaData.bikeModel
+          }
+        }
+      });
+      if (error) throw error;
+      return data;
+    }
+    throw new Error('Supabase is not configured yet. Please check your .env.local file.');
+  };
+
+  const googleLogin = async () => {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}`
+        }
+      });
+      if (error) throw error;
+      return data;
+    } else {
+      throw new Error('Supabase is not configured. Add the required environment variables before signing in.');
+    }
+  };
+
+  const updateCustomerProfile = async (profileData) => {
+    if (isSupabaseConfigured && supabase && user?.rawUser) {
+      const { data, error } = await supabase.auth.updateUser({
+        data: profileData
+      });
+      if (error) throw error;
+      setUser(formatUser(data.user));
+    } else {
+      throw new Error('Supabase is not configured. Customer profiles cannot be stored locally.');
+    }
+  };
+
+  const logout = async () => {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.auth.signOut();
+    }
     setUser(null);
+    setSession(null);
   };
 
   const openAuthModal = () => setShowAuthModal(true);
@@ -56,8 +124,12 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         user,
-        login,
+        session,
+        loading,
+        loginWithEmailPassword,
+        signUpWithEmailPassword,
         googleLogin,
+        updateCustomerProfile,
         logout,
         showAuthModal,
         openAuthModal,
@@ -68,3 +140,4 @@ export function AuthProvider({ children }) {
     </AuthContext.Provider>
   );
 }
+
