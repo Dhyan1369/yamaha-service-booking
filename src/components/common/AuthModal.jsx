@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { User, Phone, CreditCard, Bike, Mail, Lock, AlertCircle } from 'lucide-react';
+import { User, Phone, CreditCard, Bike, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 import Modal from './Modal';
 import Button from './Button';
 import Input from './Input';
@@ -11,6 +11,7 @@ export default function AuthModal({ isOpen, onClose }) {
   const [mode, setMode] = useState('signin');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -25,6 +26,7 @@ export default function AuthModal({ isOpen, onClose }) {
 
   const resetForm = () => {
     setErrorMsg('');
+    setSuccessMsg('');
     setFieldErrors({});
     setLoading(false);
   };
@@ -63,6 +65,7 @@ export default function AuthModal({ isOpen, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
 
     if (!validateForm()) {
       return;
@@ -82,7 +85,10 @@ export default function AuthModal({ isOpen, onClose }) {
           bikeModel: form.bikeModel,
           email: form.email.trim()
         });
-        handleModalClose();
+        setSuccessMsg('Registration Successful!');
+        setTimeout(() => {
+          handleModalClose();
+        }, 2200);
       }
     } catch (err) {
       const msg = err.message || '';
@@ -104,39 +110,62 @@ export default function AuthModal({ isOpen, onClose }) {
     <Modal
       isOpen={isOpen}
       onClose={handleModalClose}
-      title={mode === 'signin' ? 'Sign In to Account' : 'Create New Account'}
-      subtitle={mode === 'signin' ? 'Enter your registered phone number and password' : 'Create an account to manage your bookings'}
+      title={successMsg ? 'Registration Successful' : mode === 'signin' ? 'Sign In to Account' : 'Create New Account'}
+      subtitle={successMsg ? 'Your account has been created successfully' : mode === 'signin' ? 'Enter your registered phone number and password' : 'Create an account to manage your bookings'}
     >
       <div className="space-y-4">
-        {/* Navigation Mode Selector Tabs */}
-        <div className="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800">
-          <button
-            type="button"
-            onClick={() => { setMode('signin'); setErrorMsg(''); setFieldErrors({}); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
-              mode === 'signin' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Sign In (Login)
-          </button>
-          <button
-            type="button"
-            onClick={() => { setMode('signup'); setErrorMsg(''); setFieldErrors({}); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
-              mode === 'signup' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Register (Sign Up)
-          </button>
-        </div>
-
-        {/* Error Notification Alert Banner */}
-        {errorMsg && (
-          <div className="flex items-center gap-2 p-3 bg-red-950/60 border border-red-800 text-red-300 rounded-xl text-xs">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMsg}</span>
+        {successMsg ? (
+          <div className="py-6 text-center space-y-4">
+            <div className="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-2xl flex items-center justify-center mx-auto text-green-400 shadow-lg shadow-green-500/10">
+              <CheckCircle className="w-9 h-9" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-white mb-1">Registration Successful!</h3>
+              <p className="text-sm text-green-400 font-medium">ඔබගේ ගිණුම සාර්ථකව ලියාපදිංචි කරන ලදී.</p>
+              <p className="text-xs text-slate-400 mt-2">Welcome to Manju Yamaha Service, {form.name || 'Customer'}!</p>
+            </div>
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="primary"
+                className="w-full"
+                onClick={handleModalClose}
+              >
+                Continue (ඉදිරියට යන්න)
+              </Button>
+            </div>
           </div>
-        )}
+        ) : (
+          <>
+            {/* Navigation Mode Selector Tabs */}
+            <div className="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => { setMode('signin'); setErrorMsg(''); setFieldErrors({}); }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+                  mode === 'signin' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Sign In (Login)
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMode('signup'); setErrorMsg(''); setFieldErrors({}); }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+                  mode === 'signup' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Register (Sign Up)
+              </button>
+            </div>
+
+            {/* Error Notification Alert Banner */}
+            {errorMsg && (
+              <div className="flex items-center gap-2 p-3 bg-red-950/60 border border-red-800 text-red-300 rounded-xl text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
 
         {/* Dynamic Form */}
         <form onSubmit={handleSubmit} className="space-y-3" noValidate>
@@ -282,7 +311,9 @@ export default function AuthModal({ isOpen, onClose }) {
             </Button>
           </div>
         </form>
-      </div>
-    </Modal>
+      </>
+    )}
+  </div>
+</Modal>
   );
 }
