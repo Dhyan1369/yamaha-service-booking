@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShieldCheck, 
-  ChevronRight, Wrench, Sparkles, Award, Zap
+  ChevronRight, Wrench, Sparkles, Award, Zap, Calendar
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useBookings } from '../hooks/useBookings';
@@ -10,6 +11,7 @@ export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { getSlotStats } = useBookings();
+  const [showSlots, setShowSlots] = useState(false);
 
   // Today's stats
   const todayObj = new Date();
@@ -30,12 +32,7 @@ export default function Home() {
   };
 
   const handleViewSlots = () => {
-    // If logged-in user is an Admin, navigate directly to Admin Control
-    if (user?.isAdmin) {
-      navigate('/admin');
-    } else {
-      navigate('/booking');
-    }
+    setShowSlots((prev) => !prev);
   };
 
   return (
@@ -70,51 +67,59 @@ export default function Home() {
             </button>
 
             <button
+              type="button"
               onClick={handleViewSlots}
-              className="w-full sm:w-auto px-6 py-4 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-200 font-semibold text-base rounded-2xl transition"
+              className={`w-full sm:w-auto px-6 py-4 border font-semibold text-base rounded-2xl transition flex items-center justify-center gap-2.5 ${
+                showSlots
+                  ? 'bg-blue-600/20 border-blue-500/50 text-blue-300 shadow-lg shadow-blue-500/10'
+                  : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-200'
+              }`}
             >
-              {user?.isAdmin ? 'View Admin Queue' : 'View Available Slots'}
+              <Calendar className="w-5 h-5 text-blue-400" />
+              {showSlots ? 'Hide Available Slots' : 'View Available Slots'}
             </button>
           </div>
 
-          {/* Slot Status Alert Banner */}
-          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto text-left">
-            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
-              <div>
-                <p className="text-xs text-slate-400 font-semibold">Today's General Slots</p>
-                <p className="text-lg font-bold text-white">
-                  {todayStats.totalBooked} / {todayStats.maxDailySlots} Filled
-                </p>
+          {/* Slot Status Alert Banner - Displayed only when 'View Available Slots' is clicked */}
+          {showSlots && (
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto text-left transition-all duration-300">
+              <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-xl">
+                <div>
+                  <p className="text-xs text-slate-400 font-semibold">Today's General Slots</p>
+                  <p className="text-lg font-bold text-white">
+                    {todayStats.totalBooked} / {todayStats.maxDailySlots} Filled
+                  </p>
+                </div>
+                <div
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold ${
+                    todayStats.isDayFull
+                      ? 'bg-red-500/20 text-red-400'
+                      : 'bg-green-500/20 text-green-400'
+                  }`}
+                >
+                  {todayStats.isDayFull ? 'FULL' : `${todayStats.availableSlots} Available`}
+                </div>
               </div>
-              <div
-                className={`px-2.5 py-1 rounded-md text-xs font-bold ${
-                  todayStats.isDayFull
-                    ? 'bg-red-500/20 text-red-400'
-                    : 'bg-green-500/20 text-green-400'
-                }`}
-              >
-                {todayStats.isDayFull ? 'FULL' : `${todayStats.availableSlots} Available`}
-              </div>
-            </div>
 
-            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
-              <div>
-                <p className="text-xs text-slate-400 font-semibold">Today's Free Services</p>
-                <p className="text-lg font-bold text-white">
-                  {todayStats.freeServices} / {todayStats.maxFreeServices} Used
-                </p>
-              </div>
-              <div
-                className={`px-2.5 py-1 rounded-md text-xs font-bold ${
-                  todayStats.isFreeServiceFull
-                    ? 'bg-red-500/20 text-red-400'
-                    : 'bg-blue-500/20 text-blue-400'
-                }`}
-              >
-                {todayStats.isFreeServiceFull ? 'QUOTA FULL' : `${todayStats.availableFreeSlots} Left`}
+              <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-xl">
+                <div>
+                  <p className="text-xs text-slate-400 font-semibold">Today's Free Services</p>
+                  <p className="text-lg font-bold text-white">
+                    {todayStats.freeServices} / {todayStats.maxFreeServices} Used
+                  </p>
+                </div>
+                <div
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold ${
+                    todayStats.isFreeServiceFull
+                      ? 'bg-red-500/20 text-red-400'
+                      : 'bg-blue-500/20 text-blue-400'
+                  }`}
+                >
+                  {todayStats.isFreeServiceFull ? 'QUOTA FULL' : `${todayStats.availableFreeSlots} Left`}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </section>
 
