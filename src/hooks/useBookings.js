@@ -73,14 +73,14 @@ export function useBookings() {
   };
 
   const refreshAvailability = useCallback(async (date) => {
-    if (!date || !user?.id) return;
+    if (!date) return;
     try {
       const data = await bookingService.getAvailability(date);
       if (data) setAvailability((previous) => ({ ...previous, [date]: data }));
     } catch (err) {
       setError(err.message || 'Failed to load slot availability');
     }
-  }, [user]);
+  }, []);
 
   const updateStatus = async (id, newStatus) => {
     try {

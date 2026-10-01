@@ -3,9 +3,12 @@
  */
 
 // Validate email format
-export const validateEmail = (emailStr) => {
+export const validateEmail = (emailStr, isOptional = false) => {
   const clean = (emailStr || '').trim();
-  if (!clean) return { valid: false, message: 'Email address is required' };
+  if (!clean) {
+    if (isOptional) return { valid: true, message: '' };
+    return { valid: false, message: 'Email address is required' };
+  }
 
   // Standard RFC 5322 regex for email validation
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
