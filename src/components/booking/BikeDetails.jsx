@@ -1,4 +1,4 @@
-import { Bike, Hash } from 'lucide-react';
+import { Bike, Hash, Gauge } from 'lucide-react';
 import Input from '../common/Input';
 
 const YAMAHA_MODELS = [
@@ -15,6 +15,8 @@ const YAMAHA_MODELS = [
 export default function BikeDetails({
   bikeModel,
   onBikeModelChange,
+  mileage = '',
+  onMileageChange,
   vehicleNo,
   onVehicleNoChange,
   disabled = false
@@ -43,6 +45,17 @@ export default function BikeDetails({
           </select>
         </div>
       </div>
+
+      <Input
+        label="Mileage (km)"
+        icon={Gauge}
+        type="number"
+        placeholder="e.g. 15000"
+        disabled={disabled}
+        value={mileage}
+        onChange={(e) => onMileageChange && onMileageChange(e.target.value)}
+        helperText="Enter current bike odometer reading in km"
+      />
 
       <Input
         label="Vehicle Registration No"

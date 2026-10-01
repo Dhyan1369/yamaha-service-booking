@@ -17,6 +17,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [bikeModel, setBikeModel] = useState(user?.bikeModel || 'Yamaha FZ-S V3');
+  const [mileage, setMileage] = useState('');
   const [vehicleNo, setVehicleNo] = useState('');
   const [serviceType, setServiceType] = useState('Free Service');
   const [date, setDate] = useState(() => {
@@ -129,6 +130,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
         phone: customerPhone,
         nic: user.nic || 'N/A',
         bikeModel: selectedBikeModel,
+        mileage: mileage ? String(mileage).trim() : '',
         vehicleNo,
         serviceType,
         date,
@@ -183,6 +185,8 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
         <BikeDetails
           bikeModel={selectedBikeModel}
           onBikeModelChange={(val) => setBikeModel(val)}
+          mileage={mileage}
+          onMileageChange={(val) => setMileage(val)}
           vehicleNo={vehicleNo}
           onVehicleNoChange={(val) => setVehicleNo(val)}
         />

@@ -1,4 +1,4 @@
-import { Check, Clock, Calendar, Bike, User, ShieldCheck, Printer } from 'lucide-react';
+import { Check, Clock, Calendar, Bike, User, ShieldCheck, Printer, Gauge } from 'lucide-react';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
 
@@ -45,6 +45,12 @@ export default function TokenReceipt({ isOpen, onClose, booking }) {
               <span className="flex items-center gap-1"><Bike className="w-3.5 h-3.5" /> Model:</span>
               <span className="font-semibold text-slate-200">{booking.bikeModel}</span>
             </div>
+            {booking.mileage && (
+              <div className="flex justify-between items-center">
+                <span className="flex items-center gap-1"><Gauge className="w-3.5 h-3.5" /> Mileage:</span>
+                <span className="font-semibold text-slate-200 font-mono">{booking.mileage} km</span>
+              </div>
+            )}
             <div className="flex justify-between items-center">
               <span>Vehicle No:</span>
               <span className="font-semibold text-slate-200 font-mono">{booking.vehicleNo || 'N/A'}</span>
