@@ -106,6 +106,19 @@ export const bookingService = {
   },
 
   async createBooking(bookingData) {
+    const _now = new Date();
+    const todayKey = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+
+    // Customer bookings must be placed before 11:59 PM of the previous day (no same-day bookings)
+    if (!bookingData.isAdmin && !bookingData.isWalkIn && bookingData.date <= todayKey) {
+      if (bookingData.date === todayKey) {
+        throw new Error(
+          'අද දිනය සඳහා booking දැමිය නොහැක. ඕනෑම දිනයක් සඳහා booking එකක් දැමිය හැක්කේ ඊට පෙර දින රාත්‍රී 11:59 PM වන තෙක් පමණි. (Bookings must be made by 11:59 PM of the day before).'
+        );
+      }
+      throw new Error('පසුගිය දින සඳහා booking දැමිය නොහැක. (Cannot book a past date).');
+    }
+
     if (!isSupabaseConfigured || !supabase) {
       const localBookings = JSON.parse(localStorage.getItem('yamaha_local_bookings') || '[]');
       const dayActive = localBookings.filter(
@@ -176,6 +189,14 @@ export const bookingService = {
     }
     if (rpcError?.message?.includes('CLOSED_DATE')) {
       throw new Error('The workshop is closed on the selected date.');
+    }
+    if (
+      rpcError?.message?.includes('BOOKING_CLOSED_FOR_DATE') ||
+      rpcError?.message?.includes('PAST_DATE')
+    ) {
+      throw new Error(
+        'අද දිනය හෝ පසුගිය දින සඳහා booking දැමිය නොහැක. ඕනෑම දිනයක් සඳහා booking එකක් දැමිය හැක්කේ ඊට පෙර දින රාත්‍රී 11:59 PM වන තෙක් පමණි.'
+      );
     }
     throw new Error('Booking could not be created. Please try again.');
   },

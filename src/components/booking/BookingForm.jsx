@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { User, Phone, Wrench, AlertCircle } from 'lucide-react';
+import { User, Phone, Wrench, AlertCircle, Clock } from 'lucide-react';
 import Input from '../common/Input';
 import Button from '../common/Button';
 import BikeDetails from './BikeDetails';
@@ -21,9 +21,10 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
   const [vehicleNo, setVehicleNo] = useState('');
   const [serviceType, setServiceType] = useState('Free Service');
   const [date, setDate] = useState(() => {
-    // Find the next valid open day from today onward
+    // Find the next valid open day starting from TOMORROW onward
+    // (bookings must be made by 11:59 PM of the previous day, so today is closed)
     const candidate = new Date();
-    // Try up to 14 days ahead to find an open day
+    candidate.setDate(candidate.getDate() + 1); // Earliest bookable day is tomorrow!
     for (let i = 0; i < 14; i++) {
       const y = candidate.getFullYear();
       const m = String(candidate.getMonth() + 1).padStart(2, '0');
@@ -70,11 +71,17 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
       return;
     }
 
-    // Guard: reject past dates (in case of any bypass)
+    // Guard: reject past dates and same-day bookings (must book by 11:59 PM of the previous day)
     const todayObj2 = new Date();
     const todayKey2 = `${todayObj2.getFullYear()}-${String(todayObj2.getMonth() + 1).padStart(2, '0')}-${String(todayObj2.getDate()).padStart(2, '0')}`;
-    if (date < todayKey2) {
-      setErrorMessage('Cannot book a past date. Please select today or a future date.');
+    if (date <= todayKey2) {
+      if (date === todayKey2) {
+        setErrorMessage(
+          'අද දිනය සඳහා booking දැමිය නොහැක. ඕනෑම දිනයක් සඳහා booking එකක් දැමිය හැක්කේ ඊට පෙර දින රාත්‍රී 11:59 PM වන තෙක් පමණි. කරුණාකර හෙට හෝ ඉදිරි දිනයක් තෝරන්න.'
+        );
+      } else {
+        setErrorMessage('Cannot book a past date. Please select tomorrow or a future date.');
+      }
       return;
     }
 
@@ -211,6 +218,17 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
               <option value="Full Service">Full Service (Comprehensive maintenance)</option>
               <option value="Normal Service">Normal Service (Standard lube & tuning)</option>
             </select>
+          </div>
+        </div>
+
+        {/* Advance Booking Policy Notice */}
+        <div className="p-3 bg-blue-950/40 border border-blue-800/50 rounded-xl text-xs text-blue-300 flex items-start gap-2.5">
+          <Clock className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-semibold text-white">කල්තියා වෙන්කිරීමේ නීතිය (Advance Booking Notice)</p>
+            <p className="text-[11px] text-blue-200/80 leading-relaxed">
+              ඕනෑම දිනයක් සඳහා සේවා booking එකක් දැමිය හැක්කේ <strong>ඊට පෙර දින රාත්‍රී 11:59 PM</strong> දක්වා පමණි. අද දිනය සඳහා bookings දැමිය නොහැක (No same-day bookings).
+            </p>
           </div>
         </div>
 

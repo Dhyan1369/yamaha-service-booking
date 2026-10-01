@@ -101,7 +101,9 @@ export default function Admin() {
         mileage: walkInForm.mileage ? String(walkInForm.mileage).trim() : '',
         vehicleNo: walkInForm.vehicleNo,
         serviceType: walkInForm.serviceType,
-        date: selectedDate
+        date: selectedDate,
+        isWalkIn: true,
+        isAdmin: true
       };
 
       await addBooking(newBooking);

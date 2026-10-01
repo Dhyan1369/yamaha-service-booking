@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Lock, Clock } from 'lucide-react';
 import { POYA_DATES, HOLIDAY_DATES, toDateKey } from '../../services/bookingService';
 
 export default function SlotSelector({
@@ -48,22 +48,32 @@ export default function SlotSelector({
   };
 
   const checkIsClosed = (dateObj, dateKey) => {
-    if (!dateObj) return { isClosed: false, isPast: false, reason: '' };
+    if (!dateObj) return { isClosed: false, isPast: false, isSameDay: false, reason: '' };
 
     // Past dates — completely blocked
     if (dateKey < todayKey) {
-      return { isClosed: true, isPast: true, reason: 'Past date — bookings not allowed' };
+      return { isClosed: true, isPast: true, isSameDay: false, reason: 'පසුගිය දිනයක් — වෙන්කිරීම් කළ නොහැක (Past date)' };
+    }
+
+    // Same-day dates — deadline passed (must book before 11:59 PM of the previous day)
+    if (dateKey === todayKey) {
+      return {
+        isClosed: true,
+        isPast: false,
+        isSameDay: true,
+        reason: 'අද දින සඳහා bookings අවසන් (පෙර දින රාත්‍රී 11:59 PM වන තෙක් පමණි) / Same-day booking closed'
+      };
     }
 
     const isMonday  = dateObj.getDay() === 1;
     const isPoya    = POYA_DATES.has(dateKey);
     const isHoliday = HOLIDAY_DATES.has(dateKey);
 
-    if (isMonday)  return { isClosed: true, isPast: false, reason: 'Closed on Mondays (සඳුදා නිවාඩු)' };
-    if (isPoya)    return { isClosed: true, isPast: false, reason: 'Poya Day Closure (පෝය නිවාඩු)' };
-    if (isHoliday) return { isClosed: true, isPast: false, reason: 'Public Holiday (මහජන නිවාඩු)' };
+    if (isMonday)  return { isClosed: true, isPast: false, isSameDay: false, reason: 'Closed on Mondays (සඳුදා නිවාඩු)' };
+    if (isPoya)    return { isClosed: true, isPast: false, isSameDay: false, reason: 'Poya Day Closure (පෝය නිවාඩු)' };
+    if (isHoliday) return { isClosed: true, isPast: false, isSameDay: false, reason: 'Public Holiday (මහජන නිවාඩු)' };
 
-    return { isClosed: false, isPast: false, reason: '' };
+    return { isClosed: false, isPast: false, isSameDay: false, reason: '' };
   };
 
   return (
@@ -141,7 +151,7 @@ export default function SlotSelector({
                 if (!date) return <span key={`empty-${index}`} />;
 
                 const dateKey = toDateKey(date);
-                const { isClosed, isPast, reason } = checkIsClosed(date, dateKey);
+                const { isClosed, isPast, isSameDay, reason } = checkIsClosed(date, dateKey);
                 const isSelected = selectedDate === dateKey;
                 const isMonday  = date.getDay() === 1;
                 const isToday   = dateKey === todayKey;
@@ -150,7 +160,7 @@ export default function SlotSelector({
                   <button
                     key={dateKey}
                     type="button"
-                    title={reason || (isToday ? 'Today' : '')}
+                    title={reason || (isToday ? 'Today (Closed for booking)' : '')}
                     disabled={isClosed}
                     onClick={() => {
                       if (!isClosed) {
@@ -162,23 +172,23 @@ export default function SlotSelector({
                       isSelected
                         ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/40'
                         : isPast
-                        ? 'text-slate-700 cursor-not-allowed'
+                        ? 'text-slate-700 cursor-not-allowed opacity-40'
+                        : isSameDay
+                        ? 'bg-amber-950/20 text-amber-500/80 border border-amber-900/40 cursor-not-allowed'
                         : isClosed
                         ? 'bg-slate-950/80 text-slate-600 cursor-not-allowed border border-slate-900'
-                        : isToday
-                        ? 'ring-1 ring-blue-500/50 text-blue-300 hover:bg-slate-800'
                         : 'text-slate-200 hover:bg-slate-800'
                     }`}
                   >
                     <span>{date.getDate()}</span>
 
-                    {/* Monday lock — only on future/today Mondays */}
-                    {!isPast && isMonday && (
+                    {/* Monday lock — only on future non-same-day Mondays */}
+                    {!isPast && !isSameDay && isMonday && (
                       <Lock className="w-2.5 h-2.5 absolute bottom-1 right-1 text-red-500/70" />
                     )}
 
-                    {/* Poya / Holiday dot — only on future/today non-Mondays */}
-                    {!isPast && !isMonday && (POYA_DATES.has(dateKey) || HOLIDAY_DATES.has(dateKey)) && (
+                    {/* Poya / Holiday dot — only on future non-same-day */}
+                    {!isPast && !isSameDay && !isMonday && (POYA_DATES.has(dateKey) || HOLIDAY_DATES.has(dateKey)) && (
                       <span
                         className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${
                           POYA_DATES.has(dateKey) ? 'bg-amber-400' : 'bg-rose-400'
@@ -186,9 +196,12 @@ export default function SlotSelector({
                       />
                     )}
 
-                    {/* Blue dot marks today */}
-                    {isToday && !isSelected && (
-                      <span className="absolute top-1 right-1 w-1 h-1 rounded-full bg-blue-400" />
+                    {/* Amber indicator on today (same-day booking closed) */}
+                    {isToday && (
+                      <span
+                        className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400"
+                        title="Same-day booking closed"
+                      />
                     )}
                   </button>
                 );
@@ -206,13 +219,29 @@ export default function SlotSelector({
               <span className="inline-flex items-center gap-1">
                 <i className="w-2 h-2 rounded-full bg-rose-400 not-italic" /> නිවාඩු (Holiday)
               </span>
+              <span className="inline-flex items-center gap-1 font-semibold text-amber-400/90">
+                <Clock className="w-2.5 h-2.5" /> අද දින අවසන් (Same-day Closed)
+              </span>
               <span className="inline-flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-slate-700" /> Past Date
+              </span>
+            </div>
+
+            {/* Booking Notice */}
+            <div className="mt-2.5 p-2 bg-slate-950/70 border border-slate-800 rounded-lg text-[10px] text-slate-400 flex items-center gap-1.5">
+              <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+              <span>
+                ඕනෑම දිනයක් සඳහා booking කළ හැක්කේ <strong>ඊට පෙර දින රාත්‍රී 11:59 PM</strong> දක්වා පමණි.
               </span>
             </div>
           </div>
         )}
       </div>
+
+      <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
+        <Clock className="w-3 h-3 text-blue-400 shrink-0" />
+        <span>වෙන්කිරීම් කළ හැක්කේ අදාළ දිනට පෙර දින රාත්‍රී 11:59 PM දක්වා පමණි.</span>
+      </p>
     </div>
   );
 }
