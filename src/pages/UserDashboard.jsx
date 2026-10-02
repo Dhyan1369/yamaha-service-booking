@@ -118,7 +118,14 @@ export default function UserDashboard() {
                           <span className="text-xs text-slate-400">({booking.timeSlot})</span>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-slate-200 font-medium">{booking.bikeModel}</td>
+                      <td className="px-5 py-4 text-slate-200 font-medium">
+                        <div>{booking.bikeModel}</div>
+                        {booking.mileage && (
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            {booking.mileage} km
+                          </span>
+                        )}
+                      </td>
                       <td className="px-5 py-4 text-slate-300 font-mono text-xs">
                         {booking.vehicleNo || 'Not specified'}
                       </td>

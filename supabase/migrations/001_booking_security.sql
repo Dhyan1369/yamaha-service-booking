@@ -105,7 +105,10 @@ begin
     raise exception 'AUTH_REQUIRED';
   end if;
 
-  if p_date < current_date then
+  if not is_admin and p_date <= current_date then
+    raise exception 'BOOKING_CLOSED_FOR_DATE';
+  end if;
+  if is_admin and p_date < current_date then
     raise exception 'PAST_DATE';
   end if;
   if extract(isodow from p_date) = 1 then

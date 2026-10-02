@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Search, Calendar, PlusCircle, Wrench, User, Phone, Bike, CreditCard, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Search, Calendar, PlusCircle, Wrench, User, Phone, Bike, CreditCard, CheckCircle2, Clock, AlertTriangle, Gauge } from 'lucide-react';
 import { useBookings } from '../hooks/useBookings';
 import Input from '../components/common/Input';
 import Button from '../components/common/Button';
@@ -29,6 +29,7 @@ export default function Admin() {
     phone: '',
     nic: 'Walk-in',
     bikeModel: 'Yamaha FZ-S V3',
+    mileage: '',
     vehicleNo: '',
     serviceType: 'Full Service'
   });
@@ -97,9 +98,12 @@ export default function Admin() {
         phone: walkInForm.phone,
         nic: walkInForm.nic,
         bikeModel: walkInForm.bikeModel,
+        mileage: walkInForm.mileage ? String(walkInForm.mileage).trim() : '',
         vehicleNo: walkInForm.vehicleNo,
         serviceType: walkInForm.serviceType,
-        date: selectedDate
+        date: selectedDate,
+        isWalkIn: true,
+        isAdmin: true
       };
 
       await addBooking(newBooking);
@@ -109,6 +113,7 @@ export default function Admin() {
         phone: '',
         nic: 'Walk-in',
         bikeModel: 'Yamaha FZ-S V3',
+        mileage: '',
         vehicleNo: '',
         serviceType: 'Full Service'
       });
@@ -289,7 +294,14 @@ export default function Admin() {
                     <p className="font-semibold text-white leading-tight">{item.name}</p>
                     <p className="text-xs text-slate-400 font-mono mt-0.5">{item.phone}</p>
                   </td>
-                  <td className="px-6 py-4 text-slate-200">{item.bikeModel}</td>
+                  <td className="px-6 py-4 text-slate-200">
+                    <div>{item.bikeModel}</div>
+                    {item.mileage && (
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        {item.mileage} km
+                      </span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-slate-300 font-mono text-xs">
                     {item.vehicleNo || 'N/A'}
                   </td>
@@ -379,6 +391,16 @@ export default function Admin() {
             placeholder="e.g. Yamaha FZ-S V3"
             value={walkInForm.bikeModel}
             onChange={(e) => setWalkInForm({ ...walkInForm, bikeModel: e.target.value })}
+          />
+
+          <Input
+            label="Mileage (km)"
+            icon={Gauge}
+            type="number"
+            placeholder="e.g. 15000"
+            value={walkInForm.mileage}
+            onChange={(e) => setWalkInForm({ ...walkInForm, mileage: e.target.value })}
+            helperText="Enter odometer reading in kilometers"
           />
 
           <Input
