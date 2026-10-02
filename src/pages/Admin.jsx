@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { ShieldCheck, Search, Calendar, PlusCircle, Wrench, User, Phone, Bike, CreditCard, CheckCircle2, Clock, AlertTriangle, Gauge } from 'lucide-react';
 import { useBookings } from '../hooks/useBookings';
 import Input from '../components/common/Input';
@@ -8,7 +8,17 @@ import { HOLIDAY_DATES, POYA_DATES } from '../services/bookingService';
 import { validateBookingData } from '../lib/validation';
 
 export default function Admin() {
-  const { updateStatus, getSlotStats, addBooking, refreshAvailability } = useBookings();
+  const {
+    bookings,
+    updateStatus,
+    getSlotStats,
+    addBooking,
+    refreshAvailability,
+    refreshBookings,
+    loading: bookingsLoading,
+    error: bookingsError
+  } = useBookings();
+
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -17,13 +27,13 @@ export default function Admin() {
     return `${year}-${month}-${day}`;
   });
 
+  const [dateViewMode, setDateViewMode] = useState('selected'); // 'selected' | 'all'
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showWalkInModal, setShowWalkInModal] = useState(false);
   const [walkInSubmitting, setWalkInSubmitting] = useState(false);
   const [walkInError, setWalkInError] = useState('');
 
-  // Form state for Walk-In / Phone-in booking
   const [walkInForm, setWalkInForm] = useState({
     name: '',
     phone: '',
@@ -35,11 +45,15 @@ export default function Admin() {
   });
 
   const stats = getSlotStats(selectedDate);
-  const dayBookings = stats.dayBookings;
+  const dayBookings = dateViewMode === 'all' ? bookings : stats.dayBookings;
+  const otherDateBookingsCount = bookings.filter((b) => b.date !== selectedDate).length;
+  const otherDateSample = bookings.find((b) => b.date !== selectedDate)?.date;
 
+  // Re-fetch bookings AND availability every time the selected date changes
   useEffect(() => {
+    refreshBookings();
     refreshAvailability(selectedDate);
-  }, [selectedDate, refreshAvailability]);
+  }, [selectedDate, refreshAvailability, refreshBookings]);
 
   const filteredBookings = dayBookings.filter((b) => {
     const matchesSearch =
@@ -47,7 +61,6 @@ export default function Admin() {
       b.bikeModel.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (b.vehicleNo && b.vehicleNo.toLowerCase().includes(searchTerm.toLowerCase()));
-
     const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -71,10 +84,9 @@ export default function Admin() {
     if (
       selectedDateObject.getDay() === 1 ||
       POYA_DATES.has(selectedDate) ||
-      HOLIDAY_DATES.has(selectedDate) ||
-      selectedDate < new Date().toISOString().slice(0, 10)
+      HOLIDAY_DATES.has(selectedDate)
     ) {
-      setWalkInError('Walk-in bookings are only allowed on open dates.');
+      setWalkInError('Walk-in bookings are only allowed on open (non-holiday) dates.');
       setWalkInSubmitting(false);
       return;
     }
@@ -145,7 +157,6 @@ export default function Admin() {
           </p>
         </div>
 
-        {/* Date Selector & Action Button */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl">
             <Calendar className="w-4 h-4 text-blue-400" />
@@ -167,7 +178,7 @@ export default function Admin() {
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
           <div className="flex justify-between items-center text-slate-400">
@@ -199,11 +210,7 @@ export default function Admin() {
             <p className="text-3xl font-black text-white">
               {stats.freeServices} <span className="text-sm font-normal text-slate-500">/ {stats.maxFreeServices}</span>
             </p>
-            <span
-              className={`text-xs font-bold ${
-                stats.isFreeServiceFull ? 'text-red-400' : 'text-green-400'
-              }`}
-            >
+            <span className={`text-xs font-bold ${stats.isFreeServiceFull ? 'text-red-400' : 'text-green-400'}`}>
               {stats.isFreeServiceFull ? 'Quota Full' : `${stats.availableFreeSlots} Left`}
             </span>
           </div>
@@ -234,18 +241,81 @@ export default function Admin() {
         </div>
       </div>
 
+      {/* Notice Banner if bookings exist on other dates */}
+      {dateViewMode === 'selected' && stats.dayBookings.length === 0 && otherDateBookingsCount > 0 && (
+        <div className="bg-blue-950/40 border border-blue-800/60 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-blue-200">
+          <div className="flex items-center gap-2">
+            <Clock className="w-5 h-5 text-blue-400 shrink-0" />
+            <div>
+              <p className="font-semibold text-white">
+                No tokens for selected date ({selectedDate}), but {otherDateBookingsCount} booking(s) exist on other dates!
+              </p>
+              <p className="text-[11px] text-blue-300/80">
+                (Customers book at least 1 day in advance, e.g. booking for {otherDateSample}).
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {otherDateSample && (
+              <button
+                type="button"
+                onClick={() => setSelectedDate(otherDateSample)}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg transition"
+              >
+                Go to {otherDateSample}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setDateViewMode('all')}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded-lg transition"
+            >
+              View All Dates ({bookings.length})
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Bookings Queue Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h3 className="font-bold text-white text-base">Service Tokens ({selectedDate})</h3>
+            <h3 className="font-bold text-white text-base">
+              {dateViewMode === 'all' ? 'All Booked Services' : `Service Tokens (${selectedDate})`}
+            </h3>
             <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 text-xs font-mono font-semibold">
-              {filteredBookings.length} Total Tokens
+              {filteredBookings.length} Tokens
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 sm:w-64">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* View Mode Toggle */}
+            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+              <button
+                type="button"
+                onClick={() => setDateViewMode('selected')}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition ${
+                  dateViewMode === 'selected'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Day View
+              </button>
+              <button
+                type="button"
+                onClick={() => setDateViewMode('all')}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition ${
+                  dateViewMode === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                All Dates ({bookings.length})
+              </button>
+            </div>
+
+            <div className="relative flex-1 sm:w-48">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
@@ -267,6 +337,16 @@ export default function Admin() {
               <option value="Completed">Completed</option>
               <option value="Cancelled">Cancelled</option>
             </select>
+
+            <button
+              onClick={refreshBookings}
+              title="Refresh bookings"
+              className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-800 rounded-xl transition"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582M20 20v-5h-.581M5.635 19A9 9 0 104.582 9H4" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -275,8 +355,9 @@ export default function Admin() {
             <thead className="bg-slate-950 text-slate-400 text-xs uppercase tracking-wider font-semibold">
               <tr>
                 <th className="px-6 py-3.5">Token #</th>
+                <th className="px-6 py-3.5">Date</th>
                 <th className="px-6 py-3.5">Time Slot</th>
-                <th className="px-6 py-3.5">Customer & Phone</th>
+                <th className="px-6 py-3.5">Customer &amp; Phone</th>
                 <th className="px-6 py-3.5">Bike Model</th>
                 <th className="px-6 py-3.5">Plate No</th>
                 <th className="px-6 py-3.5">Type</th>
@@ -284,66 +365,99 @@ export default function Admin() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900">
-              {filteredBookings.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-800/40 transition">
-                  <td className="px-6 py-4 font-mono font-bold text-blue-400 text-base">
-                    #{String(item.tokenNo).padStart(2, '0')}
-                  </td>
-                  <td className="px-6 py-4 font-semibold text-white text-xs">{item.timeSlot}</td>
-                  <td className="px-6 py-4">
-                    <p className="font-semibold text-white leading-tight">{item.name}</p>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">{item.phone}</p>
-                  </td>
-                  <td className="px-6 py-4 text-slate-200">
-                    <div>{item.bikeModel}</div>
-                    {item.mileage && (
-                      <span className="text-[11px] text-slate-400 font-mono">
-                        {item.mileage} km
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-slate-300 font-mono text-xs">
-                    {item.vehicleNo || 'N/A'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        item.serviceType === 'Free Service'
-                          ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
-                          : 'bg-slate-800 text-slate-300'
-                      }`}
-                    >
-                      {item.serviceType}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <select
-                      value={item.status}
-                      onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                      className={`text-xs rounded-lg px-2.5 py-1 text-white outline-none border font-semibold ${
-                        item.status === 'Completed'
-                          ? 'bg-green-950 border-green-800 text-green-300'
-                          : item.status === 'In-Service'
-                          ? 'bg-amber-950 border-amber-800 text-amber-300'
-                          : item.status === 'Cancelled'
-                          ? 'bg-red-950 border-red-800 text-red-300'
-                          : 'bg-slate-950 border-slate-700 text-slate-300'
-                      }`}
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="In-Service">In-Service</option>
-                      <option value="Completed">Completed</option>
-                      <option value="Cancelled">Cancelled</option>
-                    </select>
-                  </td>
-                </tr>
-              ))}
-              {filteredBookings.length === 0 && (
+              {bookingsLoading ? (
                 <tr>
-                  <td colSpan="7" className="text-center py-12 text-slate-500 text-sm">
-                    No service tokens found for {selectedDate}.
+                  <td colSpan="8" className="text-center py-14">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-slate-400 text-sm">Loading bookings for {selectedDate}...</p>
+                    </div>
                   </td>
                 </tr>
+              ) : bookingsError ? (
+                <tr>
+                  <td colSpan="8" className="text-center py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <AlertTriangle className="w-8 h-8 text-red-400" />
+                      <p className="text-red-400 text-sm font-semibold">Failed to load bookings</p>
+                      <p className="text-slate-500 text-xs max-w-xs text-center">{bookingsError}</p>
+                      <button
+                        onClick={refreshBookings}
+                        className="mt-1 text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  {filteredBookings.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-800/40 transition">
+                      <td className="px-6 py-4 font-mono font-bold text-blue-400 text-base">
+                        #{String(item.tokenNo).padStart(2, '00')}
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-slate-200 text-xs font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                          <span>{item.date}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-white text-xs">{item.timeSlot}</td>
+                      <td className="px-6 py-4">
+                        <p className="font-semibold text-white leading-tight">{item.name}</p>
+                        <p className="text-xs text-slate-400 font-mono mt-0.5">{item.phone}</p>
+                      </td>
+                      <td className="px-6 py-4 text-slate-200">
+                        <div>{item.bikeModel}</div>
+                        {item.mileage && (
+                          <span className="text-[11px] text-slate-400 font-mono">{item.mileage} km</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-slate-300 font-mono text-xs">
+                        {item.vehicleNo || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            item.serviceType === 'Free Service'
+                              ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                              : 'bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          {item.serviceType}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <select
+                          value={item.status}
+                          onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                          className={`text-xs rounded-lg px-2.5 py-1 text-white outline-none border font-semibold ${
+                            item.status === 'Completed'
+                              ? 'bg-green-950 border-green-800 text-green-300'
+                              : item.status === 'In-Service'
+                              ? 'bg-amber-950 border-amber-800 text-amber-300'
+                              : item.status === 'Cancelled'
+                              ? 'bg-red-950 border-red-800 text-red-300'
+                              : 'bg-slate-950 border-slate-700 text-slate-300'
+                          }`}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="In-Service">In-Service</option>
+                          <option value="Completed">Completed</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredBookings.length === 0 && (
+                    <tr>
+                      <td colSpan="8" className="text-center py-12 text-slate-500 text-sm">
+                        No service tokens found for {selectedDate}.
+                      </td>
+                    </tr>
+                  )}
+                </>
               )}
             </tbody>
           </table>
@@ -355,7 +469,7 @@ export default function Admin() {
         isOpen={showWalkInModal}
         onClose={() => setShowWalkInModal(false)}
         title="Issue Walk-In / Phone Token"
-        subtitle={`Generate a token for ${selectedDate}`}
+        subtitle={`Generate a service token for ${selectedDate}`}
       >
         <form onSubmit={handleWalkInSubmit} className="space-y-4">
           {walkInError && (
@@ -413,9 +527,7 @@ export default function Admin() {
           />
 
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-              Service Type
-            </label>
+            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Service Type</label>
             <select
               value={walkInForm.serviceType}
               onChange={(e) => setWalkInForm({ ...walkInForm, serviceType: e.target.value })}
@@ -428,20 +540,10 @@ export default function Admin() {
           </div>
 
           <div className="flex gap-3 pt-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={() => setShowWalkInModal(false)}
-            >
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setShowWalkInModal(false)}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={walkInSubmitting || stats.isDayFull}
-              className="flex-1"
-            >
+            <Button type="submit" variant="primary" disabled={walkInSubmitting || stats.isDayFull} className="flex-1">
               {walkInSubmitting ? 'Generating...' : 'Issue Token'}
             </Button>
           </div>
@@ -450,4 +552,3 @@ export default function Admin() {
     </div>
   );
 }
-
