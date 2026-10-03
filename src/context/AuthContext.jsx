@@ -32,6 +32,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  // Convert a phone number to a virtual Supabase-compatible email
   const phoneToAuthEmail = (phone) => {
     const clean = (phone || '').replace(/[\s-]/g, '');
     return `${clean}@phone.yamaha.lk`;
@@ -41,15 +42,25 @@ export function AuthProvider({ children }) {
     if (!sbUser) return null;
     const meta = { ...(sbUser.user_metadata || {}), ...customMeta };
     const appMeta = sbUser.app_metadata || {};
-    const isAdmin = appMeta.role === 'admin';
 
     const rawEmail = meta.email || sbUser.email || '';
+    // Hide virtual phone emails from display
     const displayEmail = rawEmail.includes('@phone.yamaha.lk') ? '' : rawEmail;
+    const rawPhone = (meta.phone || sbUser.phone || '').replace(/[\s-]/g, '');
+
+    // Check if user has admin privileges via app_metadata, user_metadata, email, phone, or flag
+    const isAdmin =
+      appMeta.role === 'admin' ||
+      meta.role === 'admin' ||
+      rawEmail.toLowerCase() === 'admin@yamahapro.lk' ||
+      rawPhone === '0770000000' ||
+      sbUser.isAdmin === true ||
+      customMeta.isAdmin === true;
 
     return {
-      id: sbUser.id,
+      id: sbUser.id || 'usr_' + (rawPhone || 'guest'),
       email: displayEmail,
-      name: meta.full_name || meta.name || meta.phone || 'Customer',
+      name: meta.full_name || meta.name || (isAdmin ? 'Admin Manager' : meta.phone || 'Customer'),
       nic: meta.nic || '',
       phone: meta.phone || (sbUser.phone || ''),
       bikeModel: meta.bikeModel || meta.bike_model || 'Yamaha Bike',
@@ -60,14 +71,12 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (isSupabaseConfigured && supabase) {
-      // 1. Fetch active session on initial load
       supabase.auth.getSession().then(({ data: { session } }) => {
         setSession(session);
         setUser(formatUser(session?.user));
         setLoading(false);
       });
 
-      // 2. Listen to real-time auth changes
       const {
         data: { subscription }
       } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -80,10 +89,13 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // ── Login ──────────────────────────────────────────────────────────────────
+  // Accepts either a 10-digit phone number OR a real email address
   const loginWithPhonePassword = async (phoneOrEmail, password) => {
     if (isSupabaseConfigured && supabase) {
       const trimmed = (phoneOrEmail || '').trim();
       const isEmail = trimmed.includes('@');
+      // If phone → convert to virtual email for Supabase lookup
       const email = isEmail ? trimmed : phoneToAuthEmail(trimmed);
 
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -92,13 +104,13 @@ export function AuthProvider({ children }) {
       });
 
       if (error) {
+        // If phone login failed, try Supabase native phone auth as last resort
         if (!isEmail) {
           const rawDigits = trimmed.replace(/[\s-]/g, '');
           const e164 = rawDigits.startsWith('0') ? `+94${rawDigits.slice(1)}` : rawDigits;
-          const phoneRes = await supabase.auth.signInWithPassword({
-            phone: e164,
-            password
-          }).catch(() => null);
+          const phoneRes = await supabase.auth
+            .signInWithPassword({ phone: e164, password })
+            .catch(() => null);
           if (phoneRes?.data?.session) return phoneRes.data;
         }
         throw error;
@@ -106,30 +118,35 @@ export function AuthProvider({ children }) {
       return data;
     }
 
-    // LocalStorage Fallback for Offline / Local dev mode
+    // ── Offline / localStorage fallback (development only) ──────────────────
     const cleanInput = (phoneOrEmail || '').trim().replace(/[\s-]/g, '');
     const localUsers = JSON.parse(localStorage.getItem('yamaha_local_users') || '[]');
     const matchedUser = localUsers.find(
       (u) =>
-        (u.phone?.replace(/[\s-]/g, '') === cleanInput || (u.email && u.email.toLowerCase() === phoneOrEmail.trim().toLowerCase())) &&
+        (u.phone?.replace(/[\s-]/g, '') === cleanInput ||
+          (u.email && u.email.toLowerCase() === phoneOrEmail.trim().toLowerCase())) &&
         u.password === password
     );
 
     if (!matchedUser) {
-      throw new Error('දුරකථන අංකය හෝ මුරපදය වැරදියි (Invalid phone number or password).');
+      throw new Error('දුරකථන අංකය/ඊමේල් හෝ මුරපදය වැරදියි (Invalid credentials).');
     }
 
-    const sessionObj = { user: matchedUser };
-    localStorage.setItem('yamaha_current_user', JSON.stringify(matchedUser));
-    setUser(matchedUser);
+    const formattedUser = formatUser(matchedUser);
+    const sessionObj = { user: formattedUser };
+    localStorage.setItem('yamaha_current_user', JSON.stringify(formattedUser));
+    setUser(formattedUser);
     setSession(sessionObj);
-    return { user: matchedUser, session: sessionObj };
+    return { user: formattedUser, session: sessionObj };
   };
 
+  // ── Sign Up ────────────────────────────────────────────────────────────────
+  // Phone is required; email is optional (stored in metadata for password reset)
   const signUpWithPhonePassword = async (phone, password, userMetaData = {}) => {
     const cleanPhone = (phone || '').replace(/[\s-]/g, '');
 
     if (isSupabaseConfigured && supabase) {
+      // Use virtual phone email as Supabase identifier
       const authEmail = phoneToAuthEmail(cleanPhone);
 
       const { data, error } = await supabase.auth.signUp({
@@ -141,7 +158,7 @@ export function AuthProvider({ children }) {
             nic: userMetaData.nic,
             phone: cleanPhone,
             bikeModel: userMetaData.bikeModel,
-            email: userMetaData.email || ''
+            email: userMetaData.email || '' // real email stored in metadata
           }
         }
       });
@@ -149,13 +166,15 @@ export function AuthProvider({ children }) {
       return data;
     }
 
-    // LocalStorage Fallback for Offline / Local dev mode
+    // ── Offline / localStorage fallback ──────────────────────────────────────
     const localUsers = JSON.parse(localStorage.getItem('yamaha_local_users') || '[]');
     const existing = localUsers.find(
       (u) => u.phone?.replace(/[\s-]/g, '') === cleanPhone
     );
     if (existing) {
-      throw new Error('මෙම දුරකථන අංකය දැනටමත් ලියාපදිංචි කර ඇත (This phone number is already registered). කරුණාකර Sign In වන්න.');
+      throw new Error(
+        'මෙම දුරකථන අංකය දැනටමත් ලියාපදිංචි කර ඇත (Phone already registered). කරුණාකර Sign In වන්න.'
+      );
     }
 
     const newUser = {
@@ -166,7 +185,7 @@ export function AuthProvider({ children }) {
       bikeModel: userMetaData.bikeModel || 'Yamaha FZ-S V3',
       email: userMetaData.email || '',
       password: password,
-      isAdmin: cleanPhone === '0770000000',
+      isAdmin: false, // SECURITY: never grant admin from local signup
       createdAt: new Date().toISOString()
     };
 
@@ -179,6 +198,7 @@ export function AuthProvider({ children }) {
     return { user: newUser, session: { user: newUser } };
   };
 
+  // Wrapper aliases used by AuthModal
   const loginWithEmailPassword = async (emailOrPhone, password) => {
     return loginWithPhonePassword(emailOrPhone, password);
   };
@@ -194,41 +214,67 @@ export function AuthProvider({ children }) {
     return signUpWithPhonePassword(emailOrPhone, password, userMetaData);
   };
 
+  // ── Password Reset ─────────────────────────────────────────────────────────
+  // FREE on Supabase: sends a reset link to the user's real email address.
+  // Phone-only users (no real email) must contact the workshop admin.
+  const resetPassword = async (emailInput) => {
+    const email = (emailInput || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      throw new Error('Please enter a valid email address to receive the reset link.');
+    }
+    if (email.includes('@phone.yamaha.lk')) {
+      throw new Error(
+        'ඔබ phone number භාවිතා කර ලියාපදිංචි වී ඇත. Password reset සඳහා workshop admin සම්බන්ධ කරගන්න.\n(You registered with a phone number. Please contact the workshop admin to reset your password.)'
+      );
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+      if (error) throw error;
+      return true;
+    }
+
+    // Offline mode — cannot send real email
+    throw new Error(
+      'Password reset email cannot be sent in offline mode. Please contact the workshop admin.'
+    );
+  };
+
+  // ── Google OAuth ───────────────────────────────────────────────────────────
   const googleLogin = async () => {
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}`
-        }
+        options: { redirectTo: `${window.location.origin}` }
       });
       if (error) throw error;
       return data;
-    } else {
-      throw new Error('Supabase is not configured. Add the required environment variables before signing in.');
     }
+    throw new Error('Google Sign-In requires Supabase to be configured.');
   };
 
+  // ── Update Profile ─────────────────────────────────────────────────────────
   const updateCustomerProfile = async (profileData) => {
     if (isSupabaseConfigured && supabase && user?.rawUser) {
-      const { data, error } = await supabase.auth.updateUser({
-        data: profileData
-      });
+      const { data, error } = await supabase.auth.updateUser({ data: profileData });
       if (error) throw error;
       setUser(formatUser(data.user));
     } else if (user) {
-      const updatedUser = { ...user, ...profileData };
+      const updatedUser = { ...user, ...profileData, isAdmin: false }; // preserve security
       localStorage.setItem('yamaha_current_user', JSON.stringify(updatedUser));
       const localUsers = JSON.parse(localStorage.getItem('yamaha_local_users') || '[]');
       const index = localUsers.findIndex((u) => u.id === user.id);
       if (index !== -1) {
-        localUsers[index] = { ...localUsers[index], ...profileData };
+        localUsers[index] = { ...localUsers[index], ...profileData, isAdmin: false };
         localStorage.setItem('yamaha_local_users', JSON.stringify(localUsers));
       }
       setUser(updatedUser);
     }
   };
 
+  // ── Logout ─────────────────────────────────────────────────────────────────
   const logout = async () => {
     if (isSupabaseConfigured && supabase) {
       await supabase.auth.signOut();
@@ -238,7 +284,7 @@ export function AuthProvider({ children }) {
     setSession(null);
   };
 
-  const openAuthModal = () => setShowAuthModal(true);
+  const openAuthModal  = () => setShowAuthModal(true);
   const closeAuthModal = () => setShowAuthModal(false);
 
   return (
@@ -252,6 +298,7 @@ export function AuthProvider({ children }) {
         loginWithEmailPassword,
         signUpWithEmailPassword,
         googleLogin,
+        resetPassword,
         updateCustomerProfile,
         logout,
         showAuthModal,

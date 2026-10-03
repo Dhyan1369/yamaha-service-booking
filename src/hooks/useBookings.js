@@ -17,7 +17,10 @@ export function useBookings() {
   const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await bookingService.getBookings(null, { userId: user?.id, isAdmin: user?.isAdmin });
+      const data = await bookingService.getBookings(null, {
+        userId: user?.id,
+        isAdmin: Boolean(user?.isAdmin)
+      });
       setBookings(data || []);
       setError(null);
     } catch (err) {
@@ -26,7 +29,7 @@ export function useBookings() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user?.id, user?.isAdmin]);
 
   useEffect(() => {
     let ignore = false;
