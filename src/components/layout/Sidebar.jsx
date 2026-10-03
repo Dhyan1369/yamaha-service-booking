@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { X, Bike, Home, User, ShieldCheck, LogOut, LogIn } from 'lucide-react';
+import { X, Bike, Home, User, ShieldCheck, LogOut, LogIn, Wrench, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import Button from '../common/Button';
 
@@ -11,8 +11,9 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const links = [
     { name: 'Home', path: '/', icon: Home },
-    ...(!user || !user.isAdmin ? [{ name: 'Book Service', path: '/booking', icon: User }] : []),
-    ...(user && !user.isAdmin ? [{ name: 'My Dashboard', path: '/dashboard', icon: User }] : []),
+    ...(!user || !user.isAdmin ? [{ name: 'Book Service', path: '/booking', icon: Wrench }] : []),
+    ...(user && !user.isAdmin ? [{ name: 'My Dashboard', path: '/dashboard', icon: LayoutDashboard }] : []),
+    ...(user && !user.isAdmin ? [{ name: 'Profile (ගිණුම)', path: '/profile', icon: User }] : []),
     ...(user?.isAdmin ? [{ name: 'Admin Dashboard', path: '/admin', icon: ShieldCheck }] : [])
   ];
 
@@ -46,11 +47,18 @@ export default function Sidebar({ isOpen, onClose }) {
 
           {/* User Preview */}
           {user ? (
-            <div className="my-4 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-              <p className="text-xs text-slate-400">Signed in as</p>
-              <p className="text-sm font-bold text-white truncate">{user.name}</p>
+            <Link 
+              to="/profile" 
+              onClick={onClose}
+              className="my-4 p-3 bg-slate-950/60 hover:bg-slate-950 rounded-xl border border-slate-800 hover:border-blue-500/40 transition block group"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-400">Signed in as</p>
+                <span className="text-[10px] text-blue-400 group-hover:underline">Edit Profile →</span>
+              </div>
+              <p className="text-sm font-bold text-white truncate mt-0.5">{user.name}</p>
               <p className="text-xs text-blue-400 font-mono">{user.email || user.phone}</p>
-            </div>
+            </Link>
           ) : (
             <div className="my-4">
               <Button

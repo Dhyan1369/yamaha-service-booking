@@ -9,6 +9,7 @@ import { useAuth } from './hooks/useAuth';
 const Home = lazy(() => import('./pages/Home'));
 const Booking = lazy(() => import('./pages/Booking'));
 const UserDashboard = lazy(() => import('./pages/UserDashboard'));
+const Profile = lazy(() => import('./pages/Profile'));
 const Admin = lazy(() => import('./pages/Admin'));
 
 function ProtectedAdminRoute({ children }) {
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/booking" element={<Booking />} />
             <Route path="/dashboard" element={<UserDashboard />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<ProtectedAdminRoute><Admin /></ProtectedAdminRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

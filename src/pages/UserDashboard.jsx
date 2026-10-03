@@ -75,14 +75,24 @@ export default function UserDashboard() {
           </div>
         </div>
 
-        <Button
-          variant="primary"
-          size="md"
-          icon={Wrench}
-          onClick={() => navigate('/booking')}
-        >
-          Book a Service
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            size="md"
+            icon={User}
+            onClick={() => navigate('/profile')}
+          >
+            Edit Profile
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            icon={Wrench}
+            onClick={() => navigate('/booking')}
+          >
+            Book a Service
+          </Button>
+        </div>
       </div>
 
       {/* Bookings Section */}
