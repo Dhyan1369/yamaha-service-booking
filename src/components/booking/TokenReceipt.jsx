@@ -34,7 +34,7 @@ export default function TokenReceipt({ isOpen, onClose, booking }) {
 
           <div className="mt-4 space-y-2 text-xs text-slate-400">
             <div className="flex justify-between items-center">
-              <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Date:</span>
+              <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-white" /> Date:</span>
               <span className="font-semibold text-white font-mono">{booking.date}</span>
             </div>
             <div className="flex justify-between items-center">

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ShieldCheck, Search, Calendar, PlusCircle, Wrench, User, Phone, Bike, CreditCard, CheckCircle2, Clock, AlertTriangle, Gauge } from 'lucide-react';
 import { useBookings } from '../hooks/useBookings';
 import Input from '../components/common/Input';
@@ -159,7 +159,7 @@ export default function Admin() {
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl">
-            <Calendar className="w-4 h-4 text-blue-400" />
+            <Calendar className="w-4 h-4 text-white" />
             <input
               type="date"
               value={selectedDate}
@@ -399,7 +399,7 @@ export default function Admin() {
                       </td>
                       <td className="px-6 py-4 font-semibold text-slate-200 text-xs font-mono">
                         <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                          <Calendar className="w-3.5 h-3.5 text-white" />
                           <span>{item.date}</span>
                         </div>
                       </td>

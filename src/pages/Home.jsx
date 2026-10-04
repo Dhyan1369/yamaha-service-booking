@@ -75,7 +75,7 @@ export default function Home() {
                   : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-200'
               }`}
             >
-              <Calendar className="w-5 h-5 text-blue-400" />
+              <Calendar className="w-5 h-5 text-white" />
               {showSlots ? 'Hide Available Slots' : 'View Available Slots'}
             </button>
           </div>

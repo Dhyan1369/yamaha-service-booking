@@ -91,7 +91,7 @@ export default function SlotSelector({
           className="w-full flex items-center justify-between bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white text-sm outline-none transition focus:border-blue-500 disabled:opacity-50"
         >
           <span className="font-mono">{selectedDate}</span>
-          <Calendar className="w-4 h-4 text-blue-400" />
+          <Calendar className="w-4 h-4 text-white" />
         </button>
 
         {calendarOpen && (
