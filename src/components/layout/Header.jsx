@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Bike, LogOut, Menu, Shield } from 'lucide-react';
+import { Bike, LogOut, Menu, Shield, User } from 'lucide-react';
 import Button from '../common/Button';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -11,6 +11,7 @@ export default function Header({ onOpenSidebar }) {
     { name: 'Home', path: '/' },
     ...(!user?.isAdmin ? [{ name: 'Book Service', path: '/booking' }] : []),
     ...(user && !user.isAdmin ? [{ name: 'My Dashboard', path: '/dashboard' }] : []),
+    ...(user && !user.isAdmin ? [{ name: 'Profile', path: '/profile' }] : []),
     ...(user?.isAdmin ? [{ name: 'Admin Dashboard', path: '/admin' }] : []),
   ];
 
@@ -51,12 +52,33 @@ export default function Header({ onOpenSidebar }) {
         </nav>
 
         {/* Right Corner Buttons */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
           {user ? (
-            <div className="flex items-center space-x-3 bg-slate-800/70 border border-slate-700/60 rounded-xl px-3 py-1.5">
-              <div className="text-right hidden sm:block">
+            <div className="flex items-center space-x-2 sm:space-x-2.5">
+              {/* Profile Icon Button */}
+              <Link
+                to="/profile"
+                title="Account Profile & Settings"
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                  location.pathname === '/profile'
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30'
+                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border-slate-700/70 hover:text-white'
+                }`}
+              >
+                <User className="w-4 h-4 text-blue-400" />
+                <span className="font-semibold">Profile</span>
+              </Link>
+
+              {/* User badge with name and phone (clickable to Profile) */}
+              <Link
+                to="/profile"
+                title="View & Edit Profile"
+                className="hidden sm:block text-right bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 rounded-xl px-3 py-1.5 transition group"
+              >
                 <div className="flex items-center justify-end gap-1.5">
-                  <p className="text-sm font-semibold text-white leading-tight">{user.name}</p>
+                  <p className="text-sm font-semibold text-white leading-tight group-hover:text-blue-300 transition">
+                    {user.name}
+                  </p>
                   {user.isAdmin && (
                     <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 flex items-center gap-0.5">
                       <Shield className="w-2.5 h-2.5" /> ADMIN
@@ -64,12 +86,14 @@ export default function Header({ onOpenSidebar }) {
                   )}
                 </div>
                 <p className="text-[11px] text-blue-400 font-mono">{user.email || user.phone}</p>
-              </div>
+              </Link>
+
+              {/* Logout Button */}
               <button
                 type="button"
                 onClick={logout}
                 title="Sign Out"
-                className="p-1.5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition"
+                className="p-1.5 sm:p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-xl transition border border-transparent hover:border-red-500/30"
               >
                 <LogOut className="w-4 h-4" />
               </button>

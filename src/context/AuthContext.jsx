@@ -258,19 +258,43 @@ export function AuthProvider({ children }) {
   // ── Update Profile ─────────────────────────────────────────────────────────
   const updateCustomerProfile = async (profileData) => {
     if (isSupabaseConfigured && supabase && user?.rawUser) {
-      const { data, error } = await supabase.auth.updateUser({ data: profileData });
+      const updatePayload = {
+        data: {
+          name: profileData.name,
+          full_name: profileData.name,
+          phone: profileData.phone,
+          nic: profileData.nic,
+          bikeModel: profileData.bikeModel,
+          email: profileData.email || ''
+        }
+      };
+      if (profileData.password) {
+        updatePayload.password = profileData.password;
+      }
+      const { data, error } = await supabase.auth.updateUser(updatePayload);
       if (error) throw error;
-      setUser(formatUser(data.user));
+      const formatted = formatUser(data.user);
+      setUser(formatted);
+      return formatted;
     } else if (user) {
-      const updatedUser = { ...user, ...profileData, isAdmin: false }; // preserve security
+      const updatedUser = { 
+        ...user, 
+        ...profileData, 
+        isAdmin: Boolean(user.isAdmin) 
+      };
       localStorage.setItem('yamaha_current_user', JSON.stringify(updatedUser));
       const localUsers = JSON.parse(localStorage.getItem('yamaha_local_users') || '[]');
-      const index = localUsers.findIndex((u) => u.id === user.id);
+      const index = localUsers.findIndex((u) => u.id === user.id || u.phone === user.phone);
       if (index !== -1) {
-        localUsers[index] = { ...localUsers[index], ...profileData, isAdmin: false };
+        localUsers[index] = { 
+          ...localUsers[index], 
+          ...profileData, 
+          isAdmin: Boolean(localUsers[index].isAdmin) 
+        };
         localStorage.setItem('yamaha_local_users', JSON.stringify(localUsers));
       }
       setUser(updatedUser);
+      return updatedUser;
     }
   };
 
