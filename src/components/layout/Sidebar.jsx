@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { X, Bike, Home, User, ShieldCheck, LogOut, LogIn, Wrench, LayoutDashboard } from 'lucide-react';
+import { X, Bike, Home, User, ShieldCheck, LogOut, LogIn, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import Button from '../common/Button';
 
@@ -11,7 +11,6 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const links = [
     { name: 'Home', path: '/', icon: Home },
-    ...(!user || !user.isAdmin ? [{ name: 'Book Service', path: '/booking', icon: Wrench }] : []),
     ...(user && !user.isAdmin ? [{ name: 'My Dashboard', path: '/dashboard', icon: LayoutDashboard }] : []),
     ...(user && !user.isAdmin ? [{ name: 'Profile (ගිණුම)', path: '/profile', icon: User }] : []),
     ...(user?.isAdmin ? [{ name: 'Admin Dashboard', path: '/admin', icon: ShieldCheck }] : [])

@@ -9,7 +9,6 @@ export default function Header({ onOpenSidebar }) {
 
   const navLinks = [
     { name: 'Home', path: '/' },
-    ...(!user?.isAdmin ? [{ name: 'Book Service', path: '/booking' }] : []),
     ...(user && !user.isAdmin ? [{ name: 'My Dashboard', path: '/dashboard' }] : []),
     ...(user && !user.isAdmin ? [{ name: 'Profile', path: '/profile' }] : []),
     ...(user?.isAdmin ? [{ name: 'Admin Dashboard', path: '/admin' }] : []),
@@ -55,37 +54,32 @@ export default function Header({ onOpenSidebar }) {
         <div className="flex items-center space-x-2 sm:space-x-3">
           {user ? (
             <div className="flex items-center space-x-2 sm:space-x-2.5">
-              {/* Profile Icon Button */}
-              <Link
-                to="/profile"
-                title="Account Profile & Settings"
-                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
-                  location.pathname === '/profile'
-                    ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30'
-                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border-slate-700/70 hover:text-white'
-                }`}
-              >
-                <User className="w-4 h-4 text-blue-400" />
-                <span className="font-semibold">Profile</span>
-              </Link>
-
-              {/* User badge with name and phone (clickable to Profile) */}
+              {/* User badge with avatar, name, and phone (clickable to Profile) */}
               <Link
                 to="/profile"
                 title="View & Edit Profile"
-                className="hidden sm:block text-right bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 rounded-xl px-3 py-1.5 transition group"
+                className={`flex items-center gap-2.5 bg-slate-800/70 hover:bg-slate-800 border rounded-xl px-2.5 sm:px-3 py-1.5 transition group ${
+                  location.pathname === '/profile'
+                    ? 'border-blue-500 shadow-md shadow-blue-500/20'
+                    : 'border-slate-700/60 hover:border-slate-600'
+                }`}
               >
-                <div className="flex items-center justify-end gap-1.5">
-                  <p className="text-sm font-semibold text-white leading-tight group-hover:text-blue-300 transition">
-                    {user.name}
-                  </p>
-                  {user.isAdmin && (
-                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 flex items-center gap-0.5">
-                      <Shield className="w-2.5 h-2.5" /> ADMIN
-                    </span>
-                  )}
+                <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                  <User className="w-4 h-4" />
                 </div>
-                <p className="text-[11px] text-blue-400 font-mono">{user.email || user.phone}</p>
+                <div className="hidden sm:block text-right">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <p className="text-sm font-semibold text-white leading-tight group-hover:text-blue-300 transition">
+                      {user.name}
+                    </p>
+                    {user.isAdmin && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 flex items-center gap-0.5">
+                        <Shield className="w-2.5 h-2.5" /> ADMIN
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-blue-400 font-mono">{user.email || user.phone}</p>
+                </div>
               </Link>
 
               {/* Logout Button */}
