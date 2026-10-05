@@ -1,13 +1,15 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { User, Phone, CreditCard, Bike, Mail, Lock, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import Modal from './Modal';
 import Button from './Button';
 import Input from './Input';
 import { useAuth } from '../../hooks/useAuth';
+import { useLanguage } from '../../context/LanguageContext';
 import { validateEmail, validatePhone, validateNIC, validatePassword } from '../../lib/validation';
 
 export default function AuthModal({ isOpen, onClose }) {
   const { loginWithPhonePassword, signUpWithPhonePassword, resetPassword } = useAuth();
+  const { lang, t } = useLanguage();
 
   // mode: 'signin' | 'signup' | 'forgot'
   const [mode, setMode] = useState('signin');
@@ -49,13 +51,17 @@ export default function AuthModal({ isOpen, onClose }) {
     const errors = {};
 
     if (mode === 'signin') {
-      if (!form.loginInput.trim()) errors.loginInput = 'Phone number or email is required';
+      if (!form.loginInput.trim()) {
+        errors.loginInput = lang === 'si' ? 'දුරකථන අංකය හෝ විද්‍යුත් තැපෑල අවශ්‍යයි' : 'Phone number or email is required';
+      }
       const passCheck = validatePassword(form.password);
       if (!passCheck.valid) errors.password = passCheck.message;
     }
 
     if (mode === 'signup') {
-      if (!form.name.trim()) errors.name = 'Full Name is required';
+      if (!form.name.trim()) {
+        errors.name = lang === 'si' ? 'සම්පූර්ණ නම අවශ්‍යයි' : 'Full Name is required';
+      }
       const phoneCheck = validatePhone(form.phone);
       if (!phoneCheck.valid) errors.phone = phoneCheck.message;
       const passCheck = validatePassword(form.password);
@@ -103,11 +109,11 @@ export default function AuthModal({ isOpen, onClose }) {
     } catch (err) {
       const msg = err.message || '';
       if (msg.toLowerCase().includes('invalid login credentials') || msg.toLowerCase().includes('invalid credentials')) {
-        setErrorMsg('Phone/email or password is incorrect. Please try again. (දුරකථන/ඊමේල් හෝ මුරපදය වැරදියි)');
+        setErrorMsg(t('auth.errInvalidCreds'));
       } else if (msg.toLowerCase().includes('already registered')) {
-        setErrorMsg('This phone number is already registered. Please Sign In instead.');
+        setErrorMsg(t('auth.errAlreadyRegistered'));
       } else {
-        setErrorMsg(msg || 'Something went wrong. Please try again.');
+        setErrorMsg(msg || (lang === 'si' ? 'යම් දෝෂයක් සිදු විය. නැවත උත්සාහ කරන්න.' : 'Something went wrong. Please try again.'));
       }
     } finally {
       setLoading(false);
@@ -116,18 +122,18 @@ export default function AuthModal({ isOpen, onClose }) {
 
   if (successMsg === 'registered') {
     return (
-      <Modal isOpen={isOpen} onClose={handleModalClose} title="Registration Successful" subtitle="Your account has been created">
+      <Modal isOpen={isOpen} onClose={handleModalClose} title={t('auth.regSuccessTitle')} subtitle={t('auth.regSuccessSubtitle')}>
         <div className="py-6 text-center space-y-4">
           <div className="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-2xl flex items-center justify-center mx-auto text-green-400">
             <CheckCircle className="w-9 h-9" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-white mb-1">ලියාපදිංචිය සාර්ථකයි!</h3>
-            <p className="text-sm text-green-400 font-medium">ඔබගේ ගිණුම සාර්ථකව ලියාපදිංචි කරන ලදී.</p>
-            <p className="text-xs text-slate-400 mt-2">Welcome to Manju Yamaha Service, {form.name || 'Customer'}!</p>
+            <h3 className="text-xl font-bold text-white mb-1">{t('auth.regSuccessTitle')}</h3>
+            <p className="text-sm text-green-400 font-medium">{t('auth.regSuccessSubtitle')}</p>
+            <p className="text-xs text-slate-400 mt-2">{t('auth.welcomeCustomer')}, {form.name || t('common.customer')}!</p>
           </div>
           <Button type="button" variant="primary" className="w-full" onClick={handleModalClose}>
-            Continue (ඉදිරියට යන්න)
+            {t('auth.continueBtn')}
           </Button>
         </div>
       </Modal>
@@ -136,21 +142,20 @@ export default function AuthModal({ isOpen, onClose }) {
 
   if (successMsg === 'reset_sent') {
     return (
-      <Modal isOpen={isOpen} onClose={handleModalClose} title="Reset Link Sent" subtitle="Check your email inbox">
+      <Modal isOpen={isOpen} onClose={handleModalClose} title={t('auth.resetSentTitle')} subtitle={t('auth.resetSentDesc')}>
         <div className="py-6 text-center space-y-4">
           <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/30 rounded-2xl flex items-center justify-center mx-auto text-blue-400">
             <Mail className="w-9 h-9" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-white mb-1">Reset Link Sent!</h3>
+            <h3 className="text-xl font-bold text-white mb-1">{t('auth.resetSentTitle')}</h3>
             <p className="text-sm text-blue-400 font-medium">{form.resetEmail}</p>
             <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-              ඔබගේ email inbox බලන්න. Password reset link එකක් යවා ඇත.<br />
-              (Check your email inbox for the password reset link.)
+              {t('auth.resetSentDesc')}
             </p>
           </div>
           <Button type="button" variant="outline" className="w-full" onClick={() => switchMode('signin')}>
-            Back to Sign In
+            {t('auth.backToSignIn')}
           </Button>
         </div>
       </Modal>
@@ -162,14 +167,14 @@ export default function AuthModal({ isOpen, onClose }) {
       isOpen={isOpen}
       onClose={handleModalClose}
       title={
-        mode === 'signin' ? 'Sign In to Account' :
-        mode === 'signup' ? 'Create New Account' :
-        'Reset Password'
+        mode === 'signin' ? t('auth.signInTitle') :
+        mode === 'signup' ? t('auth.signUpTitle') :
+        t('auth.forgotTitle')
       }
       subtitle={
-        mode === 'signin' ? 'Enter your phone number or email and password' :
-        mode === 'signup' ? 'Create an account to manage your bookings' :
-        'Enter the email linked to your account'
+        mode === 'signin' ? t('auth.signInSubtitle') :
+        mode === 'signup' ? t('auth.signUpSubtitle') :
+        t('auth.forgotSubtitle')
       }
     >
       <div className="space-y-4">
@@ -183,7 +188,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 mode === 'signin' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Sign In (Login)
+              {t('auth.tabSignIn')}
             </button>
             <button
               type="button"
@@ -192,7 +197,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 mode === 'signup' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Register (Sign Up)
+              {t('auth.tabSignUp')}
             </button>
           </div>
         )}
@@ -203,7 +208,7 @@ export default function AuthModal({ isOpen, onClose }) {
             onClick={() => switchMode('signin')}
             className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition"
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Sign In
+            <ArrowLeft className="w-3.5 h-3.5" /> {t('auth.backToSignIn')}
           </button>
         )}
 
@@ -219,14 +224,14 @@ export default function AuthModal({ isOpen, onClose }) {
           {mode === 'signin' && (
             <>
               <Input
-                label="Phone Number or Email"
+                label={t('auth.loginInputLabel')}
                 icon={Phone}
                 type="text"
-                placeholder="0771234567 or kamal@gmail.com"
+                placeholder={t('auth.loginInputPlaceholder')}
                 required
                 value={form.loginInput}
                 error={fieldErrors.loginInput}
-                helperText="Enter your phone number OR your email address"
+                helperText={t('auth.loginInputHelper')}
                 onChange={(e) => {
                   setForm({ ...form, loginInput: e.target.value });
                   if (fieldErrors.loginInput) setFieldErrors({ ...fieldErrors, loginInput: '' });
@@ -234,7 +239,7 @@ export default function AuthModal({ isOpen, onClose }) {
               />
 
               <Input
-                label="Password"
+                label={t('auth.passwordLabel')}
                 icon={Lock}
                 type="password"
                 placeholder="••••••••"
@@ -253,7 +258,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   onClick={() => switchMode('forgot')}
                   className="text-xs text-blue-400 hover:text-blue-300 transition underline underline-offset-2"
                 >
-                  Forgot Password? (මුරපදය අමතකද?)
+                  {t('auth.forgotPasswordLink')}
                 </button>
               </div>
             </>
@@ -262,7 +267,7 @@ export default function AuthModal({ isOpen, onClose }) {
           {mode === 'signup' && (
             <>
               <Input
-                label="Your Full Name"
+                label={t('auth.fullNameLabel')}
                 icon={User}
                 placeholder="e.g. Kasun Kalhara"
                 required
@@ -274,7 +279,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 }}
               />
               <Input
-                label="Phone Number"
+                label={t('auth.phoneLabel')}
                 icon={Phone}
                 type="tel"
                 placeholder="e.g. 0771234567"
@@ -282,55 +287,55 @@ export default function AuthModal({ isOpen, onClose }) {
                 maxLength={10}
                 value={form.phone}
                 error={fieldErrors.phone}
-                helperText="Must be exactly 10 digits — used to login"
+                helperText={t('auth.phoneHelper')}
                 onChange={(e) => {
                   setForm({ ...form, phone: e.target.value });
                   if (fieldErrors.phone) setFieldErrors({ ...fieldErrors, phone: '' });
                 }}
               />
               <Input
-                label="Password"
+                label={t('auth.passwordLabel')}
                 icon={Lock}
                 type="password"
                 placeholder="••••••••"
                 required
                 value={form.password}
                 error={fieldErrors.password}
-                helperText="At least 6 characters"
+                helperText={t('profile.passwordHelper')}
                 onChange={(e) => {
                   setForm({ ...form, password: e.target.value });
                   if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: '' });
                 }}
               />
               <Input
-                label="Email Address (Optional — for password reset)"
+                label={t('auth.emailLabel')}
                 icon={Mail}
                 type="email"
                 placeholder="e.g. kamal@gmail.com"
                 value={form.email}
                 error={fieldErrors.email}
-                helperText="ඊමේල් නැතිනම් හිස් තබන්න. Password reset කිරීමට ඊමේල් ඕනෑ."
+                helperText={t('auth.emailHelper')}
                 onChange={(e) => {
                   setForm({ ...form, email: e.target.value });
                   if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: '' });
                 }}
               />
               <Input
-                label="ID Card (NIC) Number"
+                label={t('auth.nicLabel')}
                 icon={CreditCard}
                 placeholder="e.g. 951234567V or 199512345678"
                 required
                 maxLength={12}
                 value={form.nic}
                 error={fieldErrors.nic}
-                helperText="9 digits + V (e.g. 951234567V) or 12 digits"
+                helperText={t('auth.nicHelper')}
                 onChange={(e) => {
                   setForm({ ...form, nic: e.target.value.toUpperCase() });
                   if (fieldErrors.nic) setFieldErrors({ ...fieldErrors, nic: '' });
                 }}
               />
               <Input
-                label="Bike Model"
+                label={t('auth.bikeModelLabel')}
                 icon={Bike}
                 placeholder="e.g. Yamaha FZ-S V3"
                 required
@@ -343,21 +348,21 @@ export default function AuthModal({ isOpen, onClose }) {
           {mode === 'forgot' && (
             <>
               <div className="p-3 bg-blue-950/40 border border-blue-800/50 rounded-xl text-xs text-blue-200/80 leading-relaxed">
-                <p className="font-semibold text-white mb-1">Password Reset Instructions</p>
-                <p>ඔබගේ ගිණුමේ email ලිපිනය ඇතුළත් කරන්න. Reset link එකක් ඔබේ inbox වෙත යවනු ලැබේ.</p>
+                <p className="font-semibold text-white mb-1">{t('auth.passwordResetInstructions')}</p>
+                <p>{t('auth.passwordResetHelp')}</p>
                 <p className="mt-1.5 text-amber-300/80">
-                  ⚠️ Phone number පමණක් භාවිතා කර ලියාපදිංචි වූ users: workshop admin ට සම්බන්ධ වන්න.
+                  ⚠️ {t('auth.phoneOnlyHelp')}
                 </p>
               </div>
               <Input
-                label="Your Email Address"
+                label={t('auth.resetEmailLabel')}
                 icon={Mail}
                 type="email"
                 placeholder="e.g. kamal@gmail.com"
                 required
                 value={form.resetEmail}
                 error={fieldErrors.resetEmail}
-                helperText="Must be the email you used during registration"
+                helperText={t('auth.resetEmailHelper')}
                 onChange={(e) => {
                   setForm({ ...form, resetEmail: e.target.value });
                   if (fieldErrors.resetEmail) setFieldErrors({ ...fieldErrors, resetEmail: '' });
@@ -368,13 +373,13 @@ export default function AuthModal({ isOpen, onClose }) {
 
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={handleModalClose}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" variant="primary" className="flex-1" disabled={loading}>
-              {loading ? 'Processing...' :
-               mode === 'signin' ? 'Sign In' :
-               mode === 'signup' ? 'Create Account' :
-               'Send Reset Link'}
+              {loading ? t('auth.processing') :
+               mode === 'signin' ? t('auth.submitSignIn') :
+               mode === 'signup' ? t('auth.submitSignUp') :
+               t('auth.submitReset')}
             </Button>
           </div>
         </form>
@@ -382,3 +387,4 @@ export default function AuthModal({ isOpen, onClose }) {
     </Modal>
   );
 }
+

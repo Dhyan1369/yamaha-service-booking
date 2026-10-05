@@ -1,7 +1,10 @@
 import { Bike, Phone, MapPin, Clock, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function Footer() {
+  const { t } = useLanguage();
+
   return (
     <footer className="bg-slate-950 border-t border-slate-900 text-slate-400 text-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -17,31 +20,31 @@ export default function Footer() {
               </span>
             </div>
             <p className="text-slate-400 leading-relaxed">
-              Authorized Yamaha service center in Kamburupitiya, specializing in high-precision two-wheeler maintenance and repair.
+              {t('footer.tagline')}
             </p>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h4 className="text-white font-bold text-sm mb-3">Quick Navigation</h4>
+            <h4 className="text-white font-bold text-sm mb-3">{t('footer.quickNav')}</h4>
             <ul className="space-y-2">
-              <li><Link to="/" className="hover:text-blue-400 transition">Home</Link></li>
-              <li><Link to="/booking" className="hover:text-blue-400 transition">Book a Service Slot</Link></li>
-              <li><Link to="/dashboard" className="hover:text-blue-400 transition">Customer Dashboard</Link></li>
-              <li><Link to="/admin" className="hover:text-blue-400 transition">Admin Portal</Link></li>
+              <li><Link to="/" className="hover:text-blue-400 transition">{t('nav.home')}</Link></li>
+              <li><Link to="/booking" className="hover:text-blue-400 transition">{t('nav.bookService')}</Link></li>
+              <li><Link to="/dashboard" className="hover:text-blue-400 transition">{t('nav.myDashboard')}</Link></li>
+              <li><Link to="/admin" className="hover:text-blue-400 transition">{t('nav.adminDashboard')}</Link></li>
             </ul>
           </div>
 
           {/* Workshop Working Hours */}
           <div>
             <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-blue-500" /> Working Hours
+              <Clock className="w-4 h-4 text-blue-500" /> {t('footer.workingHours')}
             </h4>
             <ul className="space-y-1.5">
-              <li>Monday – Saturday: 8:00 AM – 5:30 PM</li>
-              <li>Sunday: 8:30 AM – 1:30 PM</li>
+              <li>{t('footer.monSat')}</li>
+              <li>{t('footer.sunday')}</li>
               <li className="text-amber-400/90 text-[11px] pt-1">
-                * Poya and Mercantile holidays subject to special token schedules.
+                {t('footer.holidayNote')}
               </li>
             </ul>
           </div>
@@ -49,23 +52,24 @@ export default function Footer() {
           {/* Contact & Location */}
           <div>
             <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-1.5">
-              <MapPin className="w-4 h-4 text-red-500" /> Service Center
+              <MapPin className="w-4 h-4 text-red-500" /> {t('footer.centerTitle')}
             </h4>
-            <p className="mb-2">Kamburupitiya, Sri Lanka</p>
+            <p className="mb-2">{t('footer.location')}</p>
             <p className="flex items-center gap-1 text-slate-300 font-mono">
               <Phone className="w-3.5 h-3.5 text-blue-400" /> +94 11 234 5678 / +94 77 123 4567
             </p>
             <div className="mt-3 inline-flex items-center gap-1 text-green-400 text-[11px] font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5" /> 100% Genuine Yamaha Yamalube &amp; Parts
+              <ShieldCheck className="w-3.5 h-3.5" /> {t('footer.genuineParts')}
             </div>
           </div>
         </div>
 
         <div className="border-t border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between text-slate-500 gap-2">
-          <p>© {new Date().getFullYear()} Manju Yamaha Service, Kamburupitiya. All rights reserved.</p>
-          <p className="text-slate-500 text-[11px]">දිනකට උපරිම ටෝකන් 12ක් පමණි (General: 12, Free: 5)</p>
+          <p>© {new Date().getFullYear()} Manju Yamaha Service, Kamburupitiya. {t('footer.allRights')}</p>
+          <p className="text-slate-500 text-[11px]">{t('footer.dailyCapNote')}</p>
         </div>
       </div>
     </footer>
   );
 }
+

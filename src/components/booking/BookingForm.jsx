@@ -7,12 +7,14 @@ import SlotSelector from './SlotSelector';
 import TokenReceipt from './TokenReceipt';
 import { useAuth } from '../../hooks/useAuth';
 import { useBookings } from '../../hooks/useBookings';
+import { useLanguage } from '../../context/LanguageContext';
 import { POYA_DATES, HOLIDAY_DATES } from '../../services/bookingService';
 import { validateBookingData } from '../../lib/validation';
 
 export default function BookingForm({ onBookingSuccess, onCancel }) {
   const { user, openAuthModal } = useAuth();
   const { addBooking, getSlotStats, refreshAvailability } = useBookings();
+  const { t } = useLanguage();
 
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
@@ -22,7 +24,6 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
   const [serviceType, setServiceType] = useState('Free Service');
   const [date, setDate] = useState(() => {
     // Find the next valid open day starting from TOMORROW onward
-    // (bookings must be made by 11:59 PM of the previous day, so today is closed)
     const candidate = new Date();
     candidate.setDate(candidate.getDate() + 1); // Earliest bookable day is tomorrow!
     for (let i = 0; i < 14; i++) {
@@ -36,7 +37,6 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
       }
       candidate.setDate(candidate.getDate() + 1);
     }
-    // Fallback: tomorrow
     const tmr = new Date();
     tmr.setDate(tmr.getDate() + 1);
     const y = tmr.getFullYear();
@@ -76,11 +76,9 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
     const todayKey2 = `${todayObj2.getFullYear()}-${String(todayObj2.getMonth() + 1).padStart(2, '0')}-${String(todayObj2.getDate()).padStart(2, '0')}`;
     if (date <= todayKey2) {
       if (date === todayKey2) {
-        setErrorMessage(
-          'අද දිනය සඳහා booking දැමිය නොහැක. ඕනෑම දිනයක් සඳහා booking එකක් දැමිය හැක්කේ ඊට පෙර දින රාත්‍රී 11:59 PM වන තෙක් පමණි. කරුණාකර හෙට හෝ ඉදිරි දිනයක් තෝරන්න.'
-        );
+        setErrorMessage(t('booking.errSameDay'));
       } else {
-        setErrorMessage('Cannot book a past date. Please select tomorrow or a future date.');
+        setErrorMessage(t('booking.errPastDate'));
       }
       return;
     }
@@ -90,19 +88,19 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
     if (dateParts.length === 3) {
       const targetDateObj = new Date(parseInt(dateParts[0], 10), parseInt(dateParts[1], 10) - 1, parseInt(dateParts[2], 10));
       if (targetDateObj.getDay() === 1) {
-        setErrorMessage('Samawenna! සඳුදා (Monday) දිනවල සේවා මධ්‍යස්ථානය වසා ඇත. කරුණාකර වෙනත් දිනයක් තෝරන්න.');
+        setErrorMessage(t('booking.errMonday'));
         return;
       }
     }
 
     // Check Poya Day closure
     if (POYA_DATES.has(date)) {
-      setErrorMessage('Samawenna! පෝය (Poya) දිනවල සේවා මධ්‍යස්ථානය වසා ඇත. කරුණාකර වෙනත් දිනයක් තෝරන්න.');
+      setErrorMessage(t('booking.errPoya'));
       return;
     }
 
     if (HOLIDAY_DATES.has(date)) {
-      setErrorMessage('Samawenna! රජයේ ප්‍රසිද්ධ නිවාඩු දිනවල සේවා මධ්‍යස්ථානය වසා ඇත. කරුණාකර වෙනත් දිනයක් තෝරන්න.');
+      setErrorMessage(t('booking.errHoliday'));
       return;
     }
 
@@ -119,14 +117,12 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
     }
 
     if (stats.isDayFull) {
-      setErrorMessage('Samawenna! Ada dinayata tokens 12 ma awasan wela aththa.');
+      setErrorMessage(t('booking.errDayFull'));
       return;
     }
 
     if (serviceType === 'Free Service' && stats.isFreeServiceFull) {
-      setErrorMessage(
-        'Ape free service quota eka (5) ada dinayata piri aththa. Karunakara Paid Service thoraganna ho wena dinayak thoranna.'
-      );
+      setErrorMessage(t('booking.errFreeQuotaFull'));
       return;
     }
 
@@ -170,7 +166,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
-            label="Customer Name"
+            label={t('booking.customerName')}
             icon={User}
             required
             value={customerName}
@@ -179,7 +175,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
           />
 
           <Input
-            label="Phone Number"
+            label={t('booking.phoneLabel')}
             icon={Phone}
             type="tel"
             required
@@ -201,7 +197,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
         {/* Service Type Selection */}
         <div>
           <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-            Select Service Type <span className="text-red-400">*</span>
+            {t('booking.selectServiceType')} <span className="text-red-400">*</span>
           </label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -213,10 +209,12 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
               className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3.5 py-2.5 text-white text-sm outline-none transition focus:border-blue-500"
             >
               <option value="Free Service" disabled={stats.isFreeServiceFull}>
-                Free Service {stats.isFreeServiceFull ? '(Quota Reached - 5/5 Full)' : `(${stats.availableFreeSlots} Slots Left)`}
+                {stats.isFreeServiceFull 
+                  ? t('booking.freeServiceFull') 
+                  : `${t('booking.freeService')} (${stats.availableFreeSlots} ${t('booking.freeServiceSlotsLeft')})`}
               </option>
-              <option value="Full Service">Full Service (Comprehensive maintenance)</option>
-              <option value="Normal Service">Normal Service (Standard lube & tuning)</option>
+              <option value="Full Service">{t('booking.fullService')}</option>
+              <option value="Normal Service">{t('booking.normalService')}</option>
             </select>
           </div>
         </div>
@@ -225,9 +223,9 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
         <div className="p-3 bg-blue-950/40 border border-blue-800/50 rounded-xl text-xs text-blue-300 flex items-start gap-2.5">
           <Clock className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
           <div className="space-y-0.5">
-            <p className="font-semibold text-white">කල්තියා වෙන්කිරීමේ නීතිය (Advance Booking Notice)</p>
+            <p className="font-semibold text-white">{t('booking.advanceNoticeTitle')}</p>
             <p className="text-[11px] text-blue-200/80 leading-relaxed">
-              ඕනෑම දිනයක් සඳහා සේවා booking එකක් දැමිය හැක්කේ <strong>ඊට පෙර දින රාත්‍රී 11:59 PM</strong> දක්වා පමණි. අද දිනය සඳහා bookings දැමිය නොහැක (No same-day bookings).
+              {t('booking.advanceNoticeDesc')}
             </p>
           </div>
         </div>
@@ -236,25 +234,30 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
         <SlotSelector
           selectedDate={date}
           onDateChange={(selected) => setDate(selected)}
+          label={t('booking.selectDate')}
         />
 
         {/* Live Slot Status for selected date */}
         <div className="p-3.5 bg-slate-950/70 border border-slate-800/80 rounded-xl text-xs space-y-2">
           <div className="flex justify-between items-center text-slate-300">
-            <span>Date Slot Availability:</span>
+            <span>{t('booking.dateAvailability')}</span>
             <span className={`font-bold ${stats.isDayFull ? 'text-red-400' : 'text-green-400'}`}>
-              {stats.isDayFull ? 'FULL (12/12)' : `${stats.availableSlots} of 12 Slots Available`}
+              {stats.isDayFull ? t('booking.full') : `${stats.availableSlots} ${t('booking.slotsAvailable')}`}
             </span>
           </div>
           <div className="flex justify-between items-center text-slate-300">
-            <span>Free Service Quota:</span>
+            <span>{t('booking.freeQuota')}</span>
             <span className={`font-bold ${stats.isFreeServiceFull ? 'text-red-400' : 'text-blue-400'}`}>
-              {stats.isFreeServiceFull ? 'Quota Reached (5/5)' : `${stats.availableFreeSlots} of 5 Left`}
+              {stats.isFreeServiceFull ? t('booking.quotaReached') : `${stats.availableFreeSlots} ${t('booking.of5Left')}`}
             </span>
           </div>
           {!stats.isDayFull && (
             <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-900">
-              Estimated token for this date: <span className="font-mono text-white font-bold">#{String(stats.nextAvailableToken).padStart(2, '0')}</span> ({stats.nextSlotTime})
+              {t('booking.estimatedToken')}{' '}
+              <span className="font-mono text-white font-bold">
+                #{String(stats.nextAvailableToken).padStart(2, '0')}
+              </span>{' '}
+              ({stats.nextSlotTime})
             </p>
           )}
         </div>
@@ -268,7 +271,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
               className="flex-1"
               onClick={onCancel}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
           )}
           <Button
@@ -277,7 +280,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
             disabled={stats.isDayFull || submitting}
             className="flex-1"
           >
-            {submitting ? 'Booking...' : stats.isDayFull ? 'Date Full' : 'Confirm Token Booking'}
+            {submitting ? t('booking.bookingInProgress') : stats.isDayFull ? t('booking.dateFull') : t('booking.confirmBooking')}
           </Button>
         </div>
       </form>

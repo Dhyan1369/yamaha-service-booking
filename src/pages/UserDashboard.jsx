@@ -3,10 +3,12 @@ import { User, Bike, Phone, CreditCard, Wrench, Calendar } from 'lucide-react';
 import Button from '../components/common/Button';
 import { useAuth } from '../hooks/useAuth';
 import { useBookings } from '../hooks/useBookings';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function UserDashboard() {
   const { user, openAuthModal } = useAuth();
   const { getUserBookings } = useBookings();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   if (!user) {
@@ -15,18 +17,18 @@ export default function UserDashboard() {
         <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-blue-400">
           <User className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-2">Customer Sign-in Required</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">{t('dashboard.signInRequiredTitle')}</h2>
         <p className="text-xs text-slate-400 mb-6">
-          ඔබගේ service bookings සහ token තත්ත්වය බැලීමට කරුණාකර පළමුව Sign-in වන්න.
+          {t('dashboard.signInRequiredDesc')}
         </p>
         <Button variant="primary" size="md" onClick={openAuthModal}>
-          Login / Sign In Now
+          {t('nav.login')}
         </Button>
       </div>
     );
   }
 
-  // Immediately query bookings for logged-in user object (id, phone, nic)
+  // Query bookings for logged-in user
   const customerBookings = getUserBookings(user);
 
   const getStatusBadge = (status) => {
@@ -42,6 +44,21 @@ export default function UserDashboard() {
     }
   };
 
+  const getTranslatedStatus = (status) => {
+    switch (status) {
+      case 'Completed':
+        return t('dashboard.statusCompleted');
+      case 'In-Service':
+        return t('dashboard.statusInService');
+      case 'Cancelled':
+        return t('dashboard.statusCancelled');
+      case 'Pending':
+        return t('dashboard.statusPending');
+      default:
+        return status;
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       {/* Top Profile Summary */}
@@ -51,8 +68,8 @@ export default function UserDashboard() {
             {(user.name || 'C').charAt(0)}
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-blue-400 font-bold mb-0.5">Customer Dashboard</p>
-            <h1 className="text-2xl font-extrabold text-white">ආයුබෝවන්, {user.name}</h1>
+            <p className="text-xs uppercase tracking-wider text-blue-400 font-bold mb-0.5">{t('dashboard.badge')}</p>
+            <h1 className="text-2xl font-extrabold text-white">{t('dashboard.greeting')} {user.name}</h1>
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-1">
               {user.phone && (
                 <span className="flex items-center gap-1">
@@ -82,7 +99,7 @@ export default function UserDashboard() {
             icon={User}
             onClick={() => navigate('/profile')}
           >
-            Edit Profile
+            {t('dashboard.editProfileBtn')}
           </Button>
           <Button
             variant="primary"
@@ -90,7 +107,7 @@ export default function UserDashboard() {
             icon={Wrench}
             onClick={() => navigate('/booking')}
           >
-            Book a Service
+            {t('dashboard.bookServiceBtn')}
           </Button>
         </div>
       </div>
@@ -98,8 +115,8 @@ export default function UserDashboard() {
       {/* Bookings Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">My Service Tokens & History</h2>
-          <span className="text-xs text-slate-400">{customerBookings.length} Bookings recorded</span>
+          <h2 className="text-lg font-bold text-white">{t('dashboard.myTokensTitle')}</h2>
+          <span className="text-xs text-slate-400">{customerBookings.length} {t('dashboard.recordedCount')}</span>
         </div>
 
         {customerBookings.length > 0 ? (
@@ -108,12 +125,12 @@ export default function UserDashboard() {
               <table className="w-full text-sm text-left min-w-[680px]">
                 <thead className="bg-slate-950 text-xs uppercase text-slate-400 font-semibold tracking-wider">
                   <tr>
-                    <th className="px-5 py-3.5">Service Date</th>
-                    <th className="px-5 py-3.5">Token & Time</th>
-                    <th className="px-5 py-3.5">Bike Model</th>
-                    <th className="px-5 py-3.5">Vehicle Plate</th>
-                    <th className="px-5 py-3.5">Service Type</th>
-                    <th className="px-5 py-3.5">Status</th>
+                    <th className="px-5 py-3.5">{t('dashboard.colDate')}</th>
+                    <th className="px-5 py-3.5">{t('dashboard.colTokenTime')}</th>
+                    <th className="px-5 py-3.5">{t('dashboard.colBikeModel')}</th>
+                    <th className="px-5 py-3.5">{t('dashboard.colPlate')}</th>
+                    <th className="px-5 py-3.5">{t('dashboard.colType')}</th>
+                    <th className="px-5 py-3.5">{t('dashboard.colStatus')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/70 bg-slate-900">
@@ -137,7 +154,7 @@ export default function UserDashboard() {
                         )}
                       </td>
                       <td className="px-5 py-4 text-slate-300 font-mono text-xs">
-                        {booking.vehicleNo || 'Not specified'}
+                        {booking.vehicleNo || t('dashboard.notSpecified')}
                       </td>
                       <td className="px-5 py-4 text-slate-300 text-xs">
                         <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700">
@@ -146,7 +163,7 @@ export default function UserDashboard() {
                       </td>
                       <td className="px-5 py-4">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadge(booking.status)}`}>
-                          {booking.status}
+                          {getTranslatedStatus(booking.status)}
                         </span>
                       </td>
                     </tr>
@@ -159,16 +176,16 @@ export default function UserDashboard() {
           <div className="border border-slate-800 bg-slate-900/50 rounded-2xl p-12 text-center text-slate-400 space-y-4">
             <Calendar className="w-10 h-10 text-slate-600 mx-auto" />
             <div>
-              <p className="font-bold text-white text-base">ඔබට තවම service booking නොමැත.</p>
-              <p className="text-xs text-slate-400 mt-1">ඔබගේ ප්‍රථම සේවා වාරය වෙන්කරවා ගැනීමට පහත බොත්තම ඔබන්න.</p>
+              <p className="font-bold text-white text-base">{t('dashboard.emptyTitle')}</p>
+              <p className="text-xs text-slate-400 mt-1">{t('dashboard.emptySubtitle')}</p>
             </div>
             <Button variant="primary" size="sm" onClick={() => navigate('/booking')}>
-              Book Service Now
+              {t('dashboard.bookServiceBtn')}
             </Button>
           </div>
         )}
       </div>
-
     </div>
   );
 }
+
