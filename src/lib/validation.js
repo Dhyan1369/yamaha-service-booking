@@ -84,3 +84,17 @@ export const validateBookingData = ({ name, phone, bikeModel, vehicleNo, service
 
   return { valid: Object.keys(errors).length === 0, errors };
 };
+
+/**
+ * bookingSchema – thin wrapper that makes validateBookingData behave like
+ * a Zod schema (safeParse API) so bookingService can call it uniformly.
+ */
+export const bookingSchema = {
+  safeParse(data) {
+    const result = validateBookingData(data);
+    if (result.valid) {
+      return { success: true, data };
+    }
+    return { success: false, error: result.errors };
+  },
+};

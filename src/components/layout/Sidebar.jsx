@@ -85,14 +85,23 @@ export default function Sidebar({ isOpen, onClose }) {
             <Link 
               to="/profile" 
               onClick={onClose}
-              className="my-4 p-3 bg-slate-950/60 hover:bg-slate-950 rounded-xl border border-slate-800 hover:border-blue-500/40 transition block group"
+              className="my-4 p-3 bg-slate-950/60 hover:bg-slate-950 rounded-xl border border-slate-800 hover:border-blue-500/40 transition flex items-center gap-3 group"
             >
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-400">{lang === 'si' ? 'ඇතුල්වී ඇති ගිණුම' : 'Signed in as'}</p>
-                <span className="text-[10px] text-blue-400 group-hover:underline">{t('nav.editProfile')} →</span>
+              <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 overflow-hidden font-bold text-sm">
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                  (user.name || 'U').charAt(0).toUpperCase()
+                )}
               </div>
-              <p className="text-sm font-bold text-white truncate mt-0.5">{user.name}</p>
-              <p className="text-xs text-blue-400 font-mono">{user.email || user.phone}</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-slate-400">{lang === 'si' ? 'ඇතුල්වී ඇති ගිණුම' : 'Signed in as'}</p>
+                  <span className="text-[10px] text-blue-400 group-hover:underline">{t('nav.editProfile')} →</span>
+                </div>
+                <p className="text-sm font-bold text-white truncate mt-0.5">{user.name}</p>
+                <p className="text-xs text-blue-400 font-mono truncate">{user.email || user.phone}</p>
+              </div>
             </Link>
           ) : (
             <div className="my-4">

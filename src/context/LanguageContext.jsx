@@ -15,7 +15,7 @@ const defaultT = (path, fallback = '') => {
       break;
     }
   }
-  return typeof current === 'string' ? current : (fallback || path);
+  return (typeof current === 'string' || Array.isArray(current)) ? current : (fallback || path);
 };
 
 export function LanguageProvider({ children }) {
@@ -66,7 +66,7 @@ export function LanguageProvider({ children }) {
       }
     }
 
-    if (current && typeof current === 'string') {
+    if (current && (typeof current === 'string' || Array.isArray(current))) {
       return current;
     }
 
@@ -81,7 +81,7 @@ export function LanguageProvider({ children }) {
       }
     }
 
-    if (enFallback && typeof enFallback === 'string') {
+    if (enFallback && (typeof enFallback === 'string' || Array.isArray(enFallback))) {
       return enFallback;
     }
 

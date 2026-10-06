@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck, Search, Calendar, PlusCircle, Wrench, User, Phone, Bike, CreditCard, CheckCircle2, Clock, AlertTriangle, Gauge } from 'lucide-react';
 import { useBookings } from '../hooks/useBookings';
+import { useAuth } from '../hooks/useAuth';
 import Input from '../components/common/Input';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
@@ -8,6 +9,7 @@ import { HOLIDAY_DATES, POYA_DATES } from '../services/bookingService';
 import { validateBookingData } from '../lib/validation';
 
 export default function Admin() {
+  const { user } = useAuth();
   const {
     bookings,
     updateStatus,
@@ -74,6 +76,15 @@ export default function Admin() {
     setWalkInError('');
     setWalkInSubmitting(true);
 
+    // Guard: only authenticated admins may use this path.
+    // The isAdmin flag is derived from server-controlled app_metadata;
+    // we never pass it in the booking payload.
+    if (!user?.isAdmin) {
+      setWalkInError('Access denied: admin session required.');
+      setWalkInSubmitting(false);
+      return;
+    }
+
     if (stats.isDayFull) {
       setWalkInError(`Cannot book: Maximum 12 daily slots reached for ${selectedDate}.`);
       setWalkInSubmitting(false);
@@ -114,8 +125,10 @@ export default function Admin() {
         vehicleNo: walkInForm.vehicleNo,
         serviceType: walkInForm.serviceType,
         date: selectedDate,
-        isWalkIn: true,
-        isAdmin: true
+        // isWalkIn tells the service this is a same-day walk-in (exempt from the
+        // advance-booking rule). Admin privilege is verified from the session,
+        // NOT passed as a flag in the payload — never trust client-supplied roles.
+        isWalkIn: true
       };
 
       await addBooking(newBooking);

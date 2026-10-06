@@ -88,15 +88,19 @@ export default function Header({ onOpenSidebar }) {
               {/* User badge with avatar, name, and edit link */}
               <Link
                 to="/profile"
-                title={t('nav.editProfile')}
+                title={t('profile.viewProfile')}
                 className={`flex items-center gap-2.5 bg-slate-800/70 hover:bg-slate-800 border rounded-xl px-2.5 sm:px-3 py-1.5 transition group ${
                   location.pathname === '/profile'
                     ? 'border-blue-500 shadow-md shadow-blue-500/20'
                     : 'border-slate-700/60 hover:border-slate-600'
                 }`}
               >
-                <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
-                  <User className="w-4 h-4" />
+                <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 overflow-hidden">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-4 h-4" />
+                  )}
                 </div>
                 <div className="hidden sm:block text-right">
                   <div className="flex items-center justify-end gap-1.5">
@@ -109,10 +113,7 @@ export default function Header({ onOpenSidebar }) {
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-blue-400 group-hover:underline flex items-center justify-end gap-0.5 mt-0.5">
-                    <span>{t('nav.editProfile')}</span>
-                    <span>→</span>
-                  </p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{user.phone}</p>
                 </div>
               </Link>
 

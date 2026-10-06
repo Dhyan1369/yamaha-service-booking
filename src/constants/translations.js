@@ -40,6 +40,8 @@ export const translations = {
     },
     profile: {
       title: "Account Details",
+      detailsTitle: "Profile Details",
+      detailsSubtitle: "Your saved account details and motorcycle information.",
       editTitle: "Edit Account Details",
       editSubtitleCustomer: "You can update your personal contact details and default motorcycle here.",
       editSubtitleAdmin: "Update your administrator name, contact numbers, and login password.",
@@ -270,6 +272,8 @@ export const translations = {
     },
     profile: {
       title: "ගිණුම් විස්තර",
+      detailsTitle: "ගිණුම් විස්තර",
+      detailsSubtitle: "ඔබගේ සුරකින ලද පුද්ගලික සහ යතුරුපැදි විස්තර.",
       editTitle: "ගිණුම් විස්තර සංස්කරණය",
       editSubtitleCustomer: "ඔබගේ නම, දුරකථන අංකය සහ යතුරුපැදි විස්තර මෙතැනින් යාවත්කාලීන කළ හැක.",
       editSubtitleAdmin: "ඔබගේ පරිපාලක නම, දුරකථන අංක සහ මුරපදය මෙතැනින් යාවත්කාලීන කරන්න.",
