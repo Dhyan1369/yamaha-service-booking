@@ -5,6 +5,7 @@ import Footer from './components/layout/Footer';
 import Sidebar from './components/layout/Sidebar';
 import AuthModal from './components/common/AuthModal';
 import { useAuth } from './hooks/useAuth';
+import { LanguageProvider } from './context/LanguageContext';
 
 const Home = lazy(() => import('./pages/Home'));
 const Booking = lazy(() => import('./pages/Booking'));
@@ -49,32 +50,34 @@ export default function App() {
   const { showAuthModal, closeAuthModal } = useAuth();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
-      {/* Top Header */}
-      <Header onOpenSidebar={() => setSidebarOpen(true)} />
+    <LanguageProvider>
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+        {/* Top Header */}
+        <Header onOpenSidebar={() => setSidebarOpen(true)} />
 
-      {/* Mobile Drawer / Sidebar */}
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        {/* Mobile Drawer / Sidebar */}
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main Content Router */}
-      <main className="flex-1">
-        <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/booking" element={<Booking />} />
-            <Route path="/dashboard" element={<UserDashboard />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/admin" element={<ProtectedAdminRoute><Admin /></ProtectedAdminRoute>} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </main>
+        {/* Main Content Router */}
+        <main className="flex-1">
+          <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/booking" element={<Booking />} />
+              <Route path="/dashboard" element={<UserDashboard />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/admin" element={<ProtectedAdminRoute><Admin /></ProtectedAdminRoute>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </main>
 
-      {/* Global Auth Modal */}
-      <AuthModal isOpen={showAuthModal} onClose={closeAuthModal} />
+        {/* Global Auth Modal */}
+        <AuthModal isOpen={showAuthModal} onClose={closeAuthModal} />
 
-      {/* Bottom Footer */}
-      <Footer />
-    </div>
+        {/* Bottom Footer */}
+        <Footer />
+      </div>
+    </LanguageProvider>
   );
 }

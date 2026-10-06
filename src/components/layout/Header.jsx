@@ -2,17 +2,17 @@ import { Link, useLocation } from 'react-router-dom';
 import { Bike, LogOut, Menu, Shield, User } from 'lucide-react';
 import Button from '../common/Button';
 import { useAuth } from '../../hooks/useAuth';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function Header({ onOpenSidebar }) {
   const { user, logout, openAuthModal } = useAuth();
+  const { lang, setLang, t } = useLanguage();
   const location = useLocation();
 
   const navLinks = [
-    { name: 'Home', path: '/' },
-    ...(!user?.isAdmin ? [{ name: 'Book Service', path: '/booking' }] : []),
-    ...(user && !user.isAdmin ? [{ name: 'My Dashboard', path: '/dashboard' }] : []),
-    ...(user && !user.isAdmin ? [{ name: 'Profile', path: '/profile' }] : []),
-    ...(user?.isAdmin ? [{ name: 'Admin Dashboard', path: '/admin' }] : []),
+    { name: t('nav.home'), path: '/' },
+    ...(user && !user.isAdmin ? [{ name: t('nav.myDashboard'), path: '/dashboard' }] : []),
+    ...(user?.isAdmin ? [{ name: t('nav.adminDashboard'), path: '/admin' }] : []),
   ];
 
   return (
@@ -27,7 +27,9 @@ export default function Header({ onOpenSidebar }) {
             <span className="text-xl font-black tracking-wider text-white flex items-center gap-1.5">
               MANJU <span className="text-red-500">YAMAHA</span> SERVICE
             </span>
-            <p className="text-xs text-slate-400 font-medium">Kamburupitiya Service Center</p>
+            <p className="text-xs text-slate-400 font-medium">
+              {lang === 'si' ? 'කඹුරුපිටිය සේවා මධ්‍යස්ථානය' : 'Kamburupitiya Service Center'}
+            </p>
           </div>
         </Link>
 
@@ -51,48 +53,75 @@ export default function Header({ onOpenSidebar }) {
           })}
         </nav>
 
-        {/* Right Corner Buttons */}
+        {/* Right Corner: Language Toggle & User Actions */}
         <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* Language Toggle Pill: EN | සිං */}
+          <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-bold shadow-inner">
+            <button
+              type="button"
+              onClick={() => setLang('en')}
+              title="English"
+              className={`px-2.5 py-1 rounded-lg transition-all ${
+                lang === 'en'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-extrabold'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => setLang('si')}
+              title="සිංහල"
+              className={`px-2.5 py-1 rounded-lg transition-all ${
+                lang === 'si'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-extrabold'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              සිං
+            </button>
+          </div>
+
           {user ? (
             <div className="flex items-center space-x-2 sm:space-x-2.5">
-              {/* Profile Icon Button */}
+              {/* User badge with avatar, name, and edit link */}
               <Link
                 to="/profile"
-                title="Account Profile & Settings"
-                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                title={t('profile.viewProfile')}
+                className={`flex items-center gap-2.5 bg-slate-800/70 hover:bg-slate-800 border rounded-xl px-2.5 sm:px-3 py-1.5 transition group ${
                   location.pathname === '/profile'
-                    ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30'
-                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border-slate-700/70 hover:text-white'
+                    ? 'border-blue-500 shadow-md shadow-blue-500/20'
+                    : 'border-slate-700/60 hover:border-slate-600'
                 }`}
               >
-                <User className="w-4 h-4 text-blue-400" />
-                <span className="font-semibold">Profile</span>
-              </Link>
-
-              {/* User badge with name and phone (clickable to Profile) */}
-              <Link
-                to="/profile"
-                title="View & Edit Profile"
-                className="hidden sm:block text-right bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 rounded-xl px-3 py-1.5 transition group"
-              >
-                <div className="flex items-center justify-end gap-1.5">
-                  <p className="text-sm font-semibold text-white leading-tight group-hover:text-blue-300 transition">
-                    {user.name}
-                  </p>
-                  {user.isAdmin && (
-                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 flex items-center gap-0.5">
-                      <Shield className="w-2.5 h-2.5" /> ADMIN
-                    </span>
+                <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 overflow-hidden">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-4 h-4" />
                   )}
                 </div>
-                <p className="text-[11px] text-blue-400 font-mono">{user.email || user.phone}</p>
+                <div className="hidden sm:block text-right">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <p className="text-sm font-semibold text-white leading-tight group-hover:text-blue-300 transition">
+                      {user.name}
+                    </p>
+                    {user.isAdmin && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 flex items-center gap-0.5">
+                        <Shield className="w-2.5 h-2.5" /> {t('common.admin').toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{user.phone}</p>
+                </div>
               </Link>
 
               {/* Logout Button */}
               <button
                 type="button"
                 onClick={logout}
-                title="Sign Out"
+                title={t('nav.logout')}
                 className="p-1.5 sm:p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-xl transition border border-transparent hover:border-red-500/30"
               >
                 <LogOut className="w-4 h-4" />
@@ -105,16 +134,14 @@ export default function Header({ onOpenSidebar }) {
               onClick={openAuthModal}
               className="hidden sm:inline-flex"
             >
-              Login / Sign In
+              {t('nav.login')}
             </Button>
           )}
 
           {/* Mobile Menu Button */}
           <button
-            type="button"
             onClick={onOpenSidebar}
-            aria-label="Open menu"
-            className="md:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition"
+            className="md:hidden p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
           >
             <Menu className="w-6 h-6" />
           </button>
@@ -123,4 +150,3 @@ export default function Header({ onOpenSidebar }) {
     </header>
   );
 }
-

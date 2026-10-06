@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, Lock, Clock } from 'lucide-react';
 import { POYA_DATES, HOLIDAY_DATES, toDateKey } from '../../services/bookingService';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function SlotSelector({
   selectedDate,
   onDateChange,
-  label = 'Service Date',
+  label,
   disabled = false
 }) {
+  const { lang, t } = useLanguage();
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     if (selectedDate) {
@@ -19,6 +21,8 @@ export default function SlotSelector({
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+
+  const displayLabel = label || t('booking.selectDate');
 
   // Build today's YYYY-MM-DD key for past-date comparison
   const _now = new Date();
@@ -52,7 +56,7 @@ export default function SlotSelector({
 
     // Past dates — completely blocked
     if (dateKey < todayKey) {
-      return { isClosed: true, isPast: true, isSameDay: false, reason: 'පසුගිය දිනයක් — වෙන්කිරීම් කළ නොහැක (Past date)' };
+      return { isClosed: true, isPast: true, isSameDay: false, reason: t('booking.closedPast') };
     }
 
     // Same-day dates — deadline passed (must book before 11:59 PM of the previous day)
@@ -61,7 +65,7 @@ export default function SlotSelector({
         isClosed: true,
         isPast: false,
         isSameDay: true,
-        reason: 'අද දින සඳහා bookings අවසන් (පෙර දින රාත්‍රී 11:59 PM වන තෙක් පමණි) / Same-day booking closed'
+        reason: t('booking.closedSameDay')
       };
     }
 
@@ -69,18 +73,20 @@ export default function SlotSelector({
     const isPoya    = POYA_DATES.has(dateKey);
     const isHoliday = HOLIDAY_DATES.has(dateKey);
 
-    if (isMonday)  return { isClosed: true, isPast: false, isSameDay: false, reason: 'Closed on Mondays (සඳුදා නිවාඩු)' };
-    if (isPoya)    return { isClosed: true, isPast: false, isSameDay: false, reason: 'Poya Day Closure (පෝය නිවාඩු)' };
-    if (isHoliday) return { isClosed: true, isPast: false, isSameDay: false, reason: 'Public Holiday (මහජන නිවාඩු)' };
+    if (isMonday)  return { isClosed: true, isPast: false, isSameDay: false, reason: t('booking.closedMonday') };
+    if (isPoya)    return { isClosed: true, isPast: false, isSameDay: false, reason: t('booking.closedPoya') };
+    if (isHoliday) return { isClosed: true, isPast: false, isSameDay: false, reason: t('booking.closedHoliday') };
 
     return { isClosed: false, isPast: false, isSameDay: false, reason: '' };
   };
 
+  const dayHeaders = t('booking.days') || ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
   return (
     <div className="w-full">
-      {label && (
+      {displayLabel && (
         <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-          {label} <span className="text-red-400">*</span>
+          {displayLabel} <span className="text-red-400">*</span>
         </label>
       )}
       <div className="relative">
@@ -118,8 +124,8 @@ export default function SlotSelector({
                 <ChevronLeft className="w-4 h-4" />
               </button>
 
-              <p className="text-sm font-bold text-white">
-                {calendarMonth.toLocaleDateString('en', { month: 'long', year: 'numeric' })}
+              <p className="text-sm font-bold text-white capitalize">
+                {calendarMonth.toLocaleDateString(lang === 'si' ? 'si-LK' : 'en-US', { month: 'long', year: 'numeric' })}
               </p>
 
               <button
@@ -138,8 +144,8 @@ export default function SlotSelector({
 
             {/* Day-of-Week Headers */}
             <div className="grid grid-cols-7 text-center text-[10px] text-slate-500 font-semibold mb-2">
-              {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
-                <span key={day} className={day === 'Mo' ? 'text-red-400 font-bold' : ''}>
+              {dayHeaders.map((day, idx) => (
+                <span key={`${day}-${idx}`} className={idx === 0 ? 'text-red-400 font-bold' : ''}>
                   {day}
                 </span>
               ))}
@@ -160,7 +166,7 @@ export default function SlotSelector({
                   <button
                     key={dateKey}
                     type="button"
-                    title={reason || (isToday ? 'Today (Closed for booking)' : '')}
+                    title={reason || (isToday ? t('booking.closedSameDay') : '')}
                     disabled={isClosed}
                     onClick={() => {
                       if (!isClosed) {
@@ -200,7 +206,7 @@ export default function SlotSelector({
                     {isToday && (
                       <span
                         className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400"
-                        title="Same-day booking closed"
+                        title={t('booking.closedSameDay')}
                       />
                     )}
                   </button>
@@ -211,19 +217,19 @@ export default function SlotSelector({
             {/* Legend */}
             <div className="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-x-3 gap-y-2 text-[10px] text-slate-400">
               <span className="inline-flex items-center gap-1 font-semibold text-red-400">
-                <Lock className="w-2.5 h-2.5" /> සඳුදා (Mondays Closed)
+                <Lock className="w-2.5 h-2.5" /> {t('booking.legendMonday')}
               </span>
               <span className="inline-flex items-center gap-1">
-                <i className="w-2 h-2 rounded-full bg-amber-400 not-italic" /> පෝය (Poya)
+                <i className="w-2 h-2 rounded-full bg-amber-400 not-italic" /> {t('booking.legendPoya')}
               </span>
               <span className="inline-flex items-center gap-1">
-                <i className="w-2 h-2 rounded-full bg-rose-400 not-italic" /> නිවාඩු (Holiday)
+                <i className="w-2 h-2 rounded-full bg-rose-400 not-italic" /> {t('booking.legendHoliday')}
               </span>
               <span className="inline-flex items-center gap-1 font-semibold text-amber-400/90">
-                <Clock className="w-2.5 h-2.5" /> අද දින අවසන් (Same-day Closed)
+                <Clock className="w-2.5 h-2.5" /> {t('booking.legendSameDay')}
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-slate-700" /> Past Date
+                <span className="w-2 h-2 rounded-full bg-slate-700" /> {t('booking.legendPast')}
               </span>
             </div>
 
@@ -231,7 +237,7 @@ export default function SlotSelector({
             <div className="mt-2.5 p-2 bg-slate-950/70 border border-slate-800 rounded-lg text-[10px] text-slate-400 flex items-center gap-1.5">
               <Clock className="w-3 h-3 text-amber-400 shrink-0" />
               <span>
-                ඕනෑම දිනයක් සඳහා booking කළ හැක්කේ <strong>ඊට පෙර දින රාත්‍රී 11:59 PM</strong> දක්වා පමණි.
+                {t('booking.advanceNoticeInline')}
               </span>
             </div>
           </div>
@@ -240,7 +246,7 @@ export default function SlotSelector({
 
       <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
         <Clock className="w-3 h-3 text-blue-400 shrink-0" />
-        <span>වෙන්කිරීම් කළ හැක්කේ අදාළ දිනට පෙර දින රාත්‍රී 11:59 PM දක්වා පමණි.</span>
+        <span>{t('booking.advanceNoticeInline')}</span>
       </p>
     </div>
   );

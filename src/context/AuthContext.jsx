@@ -1,6 +1,17 @@
 import { createContext, useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
+// ── Security helper: one-way SHA-256 hash for offline password storage ──────
+// NOTE: This is NOT a substitute for bcrypt on a real server; it is only used
+// for the local-development localStorage fallback when Supabase is not wired up.
+async function hashPassword(plain) {
+  const encoded = new TextEncoder().encode(plain);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 // eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext(null);
 
@@ -40,31 +51,55 @@ export function AuthProvider({ children }) {
 
   const formatUser = (sbUser, customMeta = {}) => {
     if (!sbUser) return null;
-    const meta = { ...(sbUser.user_metadata || {}), ...customMeta };
+
+    // Supabase stores extra fields inside user_metadata.
+    // Offline (localStorage) users are flat objects with the fields at the top level.
+    // We merge both sources so the code below works for either shape.
+    const meta = {
+      ...(sbUser.user_metadata || {}), // Supabase path
+      // Offline path: pick top-level fields that Supabase would put in user_metadata
+      ...(sbUser.phone     ? { phone:     sbUser.phone }     : {}),
+      ...(sbUser.nic       ? { nic:       sbUser.nic }       : {}),
+      ...(sbUser.name      ? { name:      sbUser.name }      : {}),
+      ...(sbUser.bikeModel ? { bikeModel: sbUser.bikeModel } : {}),
+      ...(sbUser.email     ? { email:     sbUser.email }     : {}),
+      ...customMeta,
+    };
     const appMeta = sbUser.app_metadata || {};
 
     const rawEmail = meta.email || sbUser.email || '';
     // Hide virtual phone emails from display
     const displayEmail = rawEmail.includes('@phone.yamaha.lk') ? '' : rawEmail;
-    const rawPhone = (meta.phone || sbUser.phone || '').replace(/[\s-]/g, '');
 
-    // Check if user has admin privileges via app_metadata, user_metadata, email, phone, or flag
-    const isAdmin =
-      appMeta.role === 'admin' ||
-      meta.role === 'admin' ||
-      rawEmail.toLowerCase() === 'admin@yamahapro.lk' ||
-      rawPhone === '0770000000' ||
-      sbUser.isAdmin === true ||
-      customMeta.isAdmin === true;
+    // Try to recover phone from the virtual email (e.g. 0771234567@phone.yamaha.lk)
+    const phoneFromEmail =
+      rawEmail.includes('@phone.yamaha.lk')
+        ? rawEmail.replace('@phone.yamaha.lk', '')
+        : '';
+
+    const rawPhone = (meta.phone || phoneFromEmail || sbUser.phone || '').replace(/[\s-]/g, '');
+
+    // ── SECURITY: Admin status is determined ONLY from server-controlled
+    // app_metadata (set via Supabase dashboard / Edge Function, never by the
+    // client). user_metadata is user-writable and must NOT be trusted for
+    // privilege checks.
+    const isAdmin = appMeta.role === 'admin';
+
+    // Offline dev-only fallback: the local user object may have isAdmin set
+    // explicitly by the development seed — but ONLY when Supabase is not
+    // configured so this code path can never run in production.
+    const isAdminLocal = !isSupabaseConfigured && (sbUser.isAdmin === true || customMeta.isAdmin === true);
+    const effectiveAdmin = isAdmin || isAdminLocal;
 
     return {
       id: sbUser.id || 'usr_' + (rawPhone || 'guest'),
       email: displayEmail,
-      name: meta.full_name || meta.name || (isAdmin ? 'Admin Manager' : meta.phone || 'Customer'),
-      nic: meta.nic || '',
-      phone: meta.phone || (sbUser.phone || ''),
+      name: meta.full_name || meta.name || (effectiveAdmin ? 'Admin Manager' : rawPhone || 'Customer'),
+      nic:  meta.nic || '',
+      phone: rawPhone,          // always cleaned and normalised
       bikeModel: meta.bikeModel || meta.bike_model || 'Yamaha Bike',
-      isAdmin: Boolean(isAdmin),
+      avatarUrl: meta.avatarUrl || meta.avatar_url || sbUser.avatarUrl || sbUser.avatar_url || '',
+      isAdmin: Boolean(effectiveAdmin),
       rawUser: sbUser
     };
   };
@@ -121,11 +156,13 @@ export function AuthProvider({ children }) {
     // ── Offline / localStorage fallback (development only) ──────────────────
     const cleanInput = (phoneOrEmail || '').trim().replace(/[\s-]/g, '');
     const localUsers = JSON.parse(localStorage.getItem('yamaha_local_users') || '[]');
+    // Compare against the stored SHA-256 hash, not the plain-text password.
+    const inputHash = await hashPassword(password);
     const matchedUser = localUsers.find(
       (u) =>
         (u.phone?.replace(/[\s-]/g, '') === cleanInput ||
           (u.email && u.email.toLowerCase() === phoneOrEmail.trim().toLowerCase())) &&
-        u.password === password
+        u.passwordHash === inputHash
     );
 
     if (!matchedUser) {
@@ -177,6 +214,9 @@ export function AuthProvider({ children }) {
       );
     }
 
+    // Hash the password before storing — never save plain text.
+    const passwordHash = await hashPassword(password);
+
     const newUser = {
       id: 'local_usr_' + Date.now(),
       phone: cleanPhone,
@@ -184,8 +224,8 @@ export function AuthProvider({ children }) {
       nic: userMetaData.nic || '',
       bikeModel: userMetaData.bikeModel || 'Yamaha FZ-S V3',
       email: userMetaData.email || '',
-      password: password,
-      isAdmin: false, // SECURITY: never grant admin from local signup
+      passwordHash,          // SHA-256 hex; plain-text is never persisted
+      isAdmin: false,        // SECURITY: admin is only granted via app_metadata
       createdAt: new Date().toISOString()
     };
 
@@ -258,6 +298,10 @@ export function AuthProvider({ children }) {
   // ── Update Profile ─────────────────────────────────────────────────────────
   const updateCustomerProfile = async (profileData) => {
     if (isSupabaseConfigured && supabase && user?.rawUser) {
+      const rawAvatar = profileData.avatarUrl ?? (user?.avatarUrl || '');
+      // Prevent Base64 strings from bloating JWT auth headers (causes HTTP 431)
+      const safeAvatarUrl = typeof rawAvatar === 'string' && rawAvatar.startsWith('http') ? rawAvatar : '';
+
       const updatePayload = {
         data: {
           name: profileData.name,
@@ -265,7 +309,9 @@ export function AuthProvider({ children }) {
           phone: profileData.phone,
           nic: profileData.nic,
           bikeModel: profileData.bikeModel,
-          email: profileData.email || ''
+          email: profileData.email || '',
+          avatarUrl: safeAvatarUrl,
+          avatar_url: safeAvatarUrl
         }
       };
       if (profileData.password) {
@@ -274,6 +320,9 @@ export function AuthProvider({ children }) {
       const { data, error } = await supabase.auth.updateUser(updatePayload);
       if (error) throw error;
       const formatted = formatUser(data.user);
+      if (rawAvatar && rawAvatar.startsWith('data:')) {
+        formatted.avatarUrl = rawAvatar;
+      }
       setUser(formatted);
       return formatted;
     } else if (user) {
