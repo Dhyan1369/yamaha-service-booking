@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const MAX_DAILY_SLOTS = 12;
 export const MAX_FREE_SERVICES = 5;
+export const MAX_STANDARD_SERVICES = 7; // Full Service + Normal Service = 7 slots per day
 
 export const POYA_DATES = new Set([
   '2026-01-03', '2026-02-01', '2026-03-03', '2026-04-02', '2026-05-01',
@@ -21,6 +22,22 @@ export const toDateKey = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+export const getNextOpenBookingDate = () => {
+  const candidate = new Date();
+  candidate.setDate(candidate.getDate() + 1); // Earliest bookable day is tomorrow (advance booking rule)
+  for (let i = 0; i < 30; i++) {
+    const key = toDateKey(candidate);
+    const dow = candidate.getDay(); // 0=Sun, 1=Mon
+    if (dow !== 1 && !POYA_DATES.has(key) && !HOLIDAY_DATES.has(key)) {
+      return key;
+    }
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  const tmr = new Date();
+  tmr.setDate(tmr.getDate() + 1);
+  return toDateKey(tmr);
+};
+
 export const calculateSlotTime = (token) => {
   const startHour = 8;
   const startMin = 30;
@@ -35,12 +52,18 @@ export const calculateSlotTime = (token) => {
 // Converts Supabase PostgreSQL snake_case columns to Frontend camelCase properties
 const mapBookingFromDb = (row) => {
   if (!row) return null;
+  let rawPhone = (row.phone || '').trim();
+  if (rawPhone.startsWith('+94')) {
+    rawPhone = '0' + rawPhone.slice(3);
+  } else if (rawPhone.startsWith('94') && rawPhone.length === 11) {
+    rawPhone = '0' + rawPhone.slice(2);
+  }
   return {
     id: row.id,
     tokenNo: row.token_no ?? row.tokenNo,
     timeSlot: row.time_slot ?? row.timeSlot,
     name: row.name,
-    phone: row.phone,
+    phone: rawPhone,
     nic: row.nic,
     bikeModel: row.bike_model ?? row.bikeModel,
     mileage: row.mileage || '',
@@ -91,13 +114,19 @@ export const bookingService = {
       const activeBookings = localBookings.filter((b) => b.date === date && b.status !== 'Cancelled');
       const totalBooked = activeBookings.length;
       const freeServices = activeBookings.filter((b) => b.serviceType === 'Free Service').length;
+      const standardServices = activeBookings.filter(
+        (b) => b.serviceType === 'Full Service' || b.serviceType === 'Normal Service'
+      ).length;
       return {
         totalBooked,
         freeServices,
+        standardServices,
         availableSlots: Math.max(0, MAX_DAILY_SLOTS - totalBooked),
         availableFreeSlots: Math.max(0, MAX_FREE_SERVICES - freeServices),
+        availableStandardSlots: Math.max(0, MAX_STANDARD_SERVICES - standardServices),
         maxDailySlots: MAX_DAILY_SLOTS,
-        maxFreeServices: MAX_FREE_SERVICES
+        maxFreeServices: MAX_FREE_SERVICES,
+        maxStandardServices: MAX_STANDARD_SERVICES
       };
     }
     const { data, error } = await supabase.rpc('get_booking_availability', { p_date: date });
@@ -132,7 +161,16 @@ export const bookingService = {
       if (bookingData.serviceType === 'Free Service') {
         const freeCount = dayActive.filter((b) => b.serviceType === 'Free Service').length;
         if (freeCount >= MAX_FREE_SERVICES) {
-          throw new Error('The free-service quota for this date has been reached.');
+          throw new Error('The free-service quota for this date has been reached (Maximum 5 slots).');
+        }
+      }
+
+      if (bookingData.serviceType === 'Full Service' || bookingData.serviceType === 'Normal Service') {
+        const standardCount = dayActive.filter(
+          (b) => b.serviceType === 'Full Service' || b.serviceType === 'Normal Service'
+        ).length;
+        if (standardCount >= MAX_STANDARD_SERVICES) {
+          throw new Error('The quota for Full & Normal services for this date has been reached (Maximum 7 slots).');
         }
       }
 
@@ -143,13 +181,20 @@ export const bookingService = {
         throw new Error('This vehicle already has a booking for the selected date.');
       }
 
+      let cleanPhone = (bookingData.phone || '').trim().replace(/[\s-]/g, '');
+      if (cleanPhone.startsWith('+94')) {
+        cleanPhone = '0' + cleanPhone.slice(3);
+      } else if (cleanPhone.startsWith('94') && cleanPhone.length === 11) {
+        cleanPhone = '0' + cleanPhone.slice(2);
+      }
+
       const nextToken = dayActive.length + 1;
       const newBooking = {
         id: 'local_bk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
         tokenNo: nextToken,
         timeSlot: calculateSlotTime(nextToken),
         name: bookingData.name.trim(),
-        phone: bookingData.phone.trim().replace(/[\s-]/g, ''),
+        phone: cleanPhone,
         nic: bookingData.nic ? bookingData.nic.trim().toUpperCase() : 'N/A',
         bikeModel: bookingData.bikeModel.trim(),
         mileage: bookingData.mileage ? String(bookingData.mileage).trim() : '',
@@ -166,10 +211,17 @@ export const bookingService = {
       return newBooking;
     }
 
+    let cleanPhone = (bookingData.phone || '').trim().replace(/[\s-]/g, '');
+    if (cleanPhone.startsWith('+94')) {
+      cleanPhone = '0' + cleanPhone.slice(3);
+    } else if (cleanPhone.startsWith('94') && cleanPhone.length === 11) {
+      cleanPhone = '0' + cleanPhone.slice(2);
+    }
+
     const { data: rpcData, error: rpcError } = await supabase.rpc('create_booking_transaction', {
       p_date: bookingData.date,
       p_name: bookingData.name,
-      p_phone: bookingData.phone,
+      p_phone: cleanPhone,
       p_nic: bookingData.nic,
       p_bike_model: bookingData.bikeModel,
       p_vehicle_no: bookingData.vehicleNo,
@@ -182,7 +234,10 @@ export const bookingService = {
       throw new Error('Sorry, all 12 service slots for this date are already fully booked!');
     }
     if (rpcError?.message?.includes('FREE_SERVICE_FULL')) {
-      throw new Error('The free-service quota for this date has been reached.');
+      throw new Error('The free-service quota for this date has been reached (Maximum 5 slots).');
+    }
+    if (rpcError?.message?.includes('STANDARD_SERVICE_FULL')) {
+      throw new Error('The quota for Full & Normal services for this date has been reached (Maximum 7 slots).');
     }
     if (rpcError?.message?.includes('DUPLICATE_BOOKING')) {
       throw new Error('This vehicle already has a booking for the selected date.');

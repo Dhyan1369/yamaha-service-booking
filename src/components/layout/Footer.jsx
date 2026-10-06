@@ -56,7 +56,7 @@ export default function Footer() {
             </h4>
             <p className="mb-2">{t('footer.location')}</p>
             <p className="flex items-center gap-1 text-slate-300 font-mono">
-              <Phone className="w-3.5 h-3.5 text-blue-400" /> +94 11 234 5678 / +94 77 123 4567
+              <Phone className="w-3.5 h-3.5 text-blue-400" /> 011 234 5678 / 077 123 4567
             </p>
             <div className="mt-3 inline-flex items-center gap-1 text-green-400 text-[11px] font-semibold">
               <ShieldCheck className="w-3.5 h-3.5" /> {t('footer.genuineParts')}
