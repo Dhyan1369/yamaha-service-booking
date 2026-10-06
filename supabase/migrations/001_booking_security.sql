@@ -160,3 +160,113 @@ $$;
 
 revoke all on function public.create_booking_transaction(date, text, text, text, text, text, text, uuid) from public, anon;
 grant execute on function public.create_booking_transaction(date, text, text, text, text, text, text, uuid) to authenticated;
+
+-- ============================================================================
+-- Auto-sync Phone & Email on auth.users
+-- Automatically sets auth.users.phone from user_metadata so the 'Phone' column
+-- in Supabase Auth dashboard is properly populated instead of showing '-'
+-- ============================================================================
+
+create or replace function public.sync_auth_user_phone()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_phone text;
+  v_email text;
+begin
+  v_phone := nullif(trim(coalesce(new.raw_user_meta_data->>'phone', '')), '');
+  v_email := nullif(trim(coalesce(new.raw_user_meta_data->>'email', '')), '');
+
+  -- 1. Populate the Phone column in auth.users
+  if v_phone is not null then
+    -- Format phone in E.164 (+94...) for Sri Lankan numbers if not already formatted
+    if not v_phone like '+%' and v_phone ~ '^0[0-9]{9}$' then
+      v_phone := '+94' || substr(v_phone, 2);
+    end if;
+
+    -- Set phone only if it is not already used by another user (avoids duplicate key error 23505)
+    if not exists (
+      select 1 from auth.users 
+       where phone = v_phone 
+         and id <> coalesce(new.id, '00000000-0000-0000-0000-000000000000'::uuid)
+    ) then
+      new.phone := v_phone;
+      new.phone_confirmed_at := coalesce(new.phone_confirmed_at, now());
+    end if;
+  end if;
+
+  -- 2. Populate the Email column with real email if provided
+  if v_email is not null and v_email <> '' and v_email like '%@%' then
+    new.email := trim(lower(v_email));
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_sync_phone on auth.users;
+create trigger on_auth_user_created_sync_phone
+  before insert or update on auth.users
+  for each row execute function public.sync_auth_user_phone();
+
+-- Update existing registered users safely (avoids duplicate phone conflict if the same number was tested multiple times)
+with ranked_users as (
+  select id,
+         case 
+           when (raw_user_meta_data->>'phone') ~ '^0[0-9]{9}$' then '+94' || substr(raw_user_meta_data->>'phone', 2)
+           else raw_user_meta_data->>'phone'
+         end as formatted_phone,
+         row_number() over (
+           partition by case 
+             when (raw_user_meta_data->>'phone') ~ '^0[0-9]{9}$' then '+94' || substr(raw_user_meta_data->>'phone', 2)
+             else raw_user_meta_data->>'phone'
+           end 
+           order by created_at desc
+         ) as rn
+    from auth.users
+   where raw_user_meta_data->>'phone' is not null
+     and (phone is null or phone = '')
+)
+update auth.users u
+   set phone = r.formatted_phone,
+       phone_confirmed_at = coalesce(u.phone_confirmed_at, now())
+  from ranked_users r
+ where u.id = r.id
+   and r.rn = 1
+   and not exists (
+     select 1 from auth.users existing 
+      where existing.phone = r.formatted_phone 
+        and existing.id <> r.id
+   );
+
+-- Lookup email by phone number to allow login using phone when real email was registered
+create or replace function public.get_email_by_phone(p_phone text)
+returns text
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_clean text;
+  v_found_email text;
+begin
+  v_clean := regexp_replace(p_phone, '[^0-9]', '', 'g');
+  if length(v_clean) >= 9 then
+    v_clean := right(v_clean, 9);
+  end if;
+
+  select email into v_found_email
+    from auth.users
+   where regexp_replace(coalesce(phone, ''), '[^0-9]', '', 'g') like '%' || v_clean
+      or regexp_replace(coalesce(raw_user_meta_data->>'phone', ''), '[^0-9]', '', 'g') like '%' || v_clean
+   limit 1;
+
+  return v_found_email;
+end;
+$$;
+
+grant execute on function public.get_email_by_phone(text) to anon, authenticated;
+

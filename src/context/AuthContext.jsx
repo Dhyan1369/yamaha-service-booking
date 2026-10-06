@@ -130,26 +130,52 @@ export function AuthProvider({ children }) {
     if (isSupabaseConfigured && supabase) {
       const trimmed = (phoneOrEmail || '').trim();
       const isEmail = trimmed.includes('@');
-      // If phone → convert to virtual email for Supabase lookup
-      const email = isEmail ? trimmed : phoneToAuthEmail(trimmed);
 
+      if (isEmail) {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: trimmed.toLowerCase(),
+          password
+        });
+        if (error) throw error;
+        return data;
+      }
+
+      const cleanPhone = trimmed.replace(/[\s-]/g, '');
+      const e164 = cleanPhone.startsWith('0') ? `+94${cleanPhone.slice(1)}` : cleanPhone;
+
+      // 1. Try native phone login first (if Phone Provider is enabled on Supabase)
+      const phoneRes = await supabase.auth
+        .signInWithPassword({ phone: e164, password })
+        .catch(() => null);
+
+      if (phoneRes?.data?.session) {
+        return phoneRes.data;
+      }
+
+      // 2. Check if this phone number belongs to an account registered with a real email
+      try {
+        const { data: foundEmail } = await supabase.rpc('get_email_by_phone', { p_phone: cleanPhone });
+        if (foundEmail && foundEmail.includes('@') && !foundEmail.includes('@phone.yamaha.lk')) {
+          const emailLoginRes = await supabase.auth.signInWithPassword({
+            email: foundEmail,
+            password
+          });
+          if (emailLoginRes?.data?.session) {
+            return emailLoginRes.data;
+          }
+        }
+      } catch {
+        // Fall through to virtual email
+      }
+
+      // 3. Fallback: virtual email lookup
+      const virtualEmail = phoneToAuthEmail(cleanPhone);
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: virtualEmail,
         password
       });
 
-      if (error) {
-        // If phone login failed, try Supabase native phone auth as last resort
-        if (!isEmail) {
-          const rawDigits = trimmed.replace(/[\s-]/g, '');
-          const e164 = rawDigits.startsWith('0') ? `+94${rawDigits.slice(1)}` : rawDigits;
-          const phoneRes = await supabase.auth
-            .signInWithPassword({ phone: e164, password })
-            .catch(() => null);
-          if (phoneRes?.data?.session) return phoneRes.data;
-        }
-        throw error;
-      }
+      if (error) throw error;
       return data;
     }
 
@@ -181,11 +207,62 @@ export function AuthProvider({ children }) {
   // Phone is required; email is optional (stored in metadata for password reset)
   const signUpWithPhonePassword = async (phone, password, userMetaData = {}) => {
     const cleanPhone = (phone || '').replace(/[\s-]/g, '');
+    const realEmail = (userMetaData.email || '').trim().toLowerCase();
+    const hasRealEmail = realEmail && realEmail.includes('@');
+    const e164 = cleanPhone.startsWith('0') ? `+94${cleanPhone.slice(1)}` : cleanPhone;
 
     if (isSupabaseConfigured && supabase) {
-      // Use virtual phone email as Supabase identifier
-      const authEmail = phoneToAuthEmail(cleanPhone);
+      // CASE 1: User provided BOTH email and phone number!
+      // Register with their real email in the Email column, and phone in metadata/trigger
+      if (hasRealEmail) {
+        const { data, error } = await supabase.auth.signUp({
+          email: realEmail,
+          password,
+          options: {
+            data: {
+              name: userMetaData.name,
+              nic: userMetaData.nic,
+              phone: cleanPhone,
+              bikeModel: userMetaData.bikeModel,
+              email: realEmail
+            }
+          }
+        });
+        if (error) throw error;
+        return data;
+      }
 
+      // CASE 2: User provided ONLY phone number (no email)
+      // Try native phone signup first (if Phone provider is enabled in Supabase)
+      try {
+        const phoneRes = await supabase.auth.signUp({
+          phone: e164,
+          password,
+          options: {
+            data: {
+              name: userMetaData.name,
+              nic: userMetaData.nic,
+              phone: cleanPhone,
+              bikeModel: userMetaData.bikeModel,
+              email: ''
+            }
+          }
+        });
+        if (!phoneRes.error && phoneRes.data?.user) {
+          return phoneRes.data;
+        }
+        if (phoneRes.error && !phoneRes.error.message?.includes('disabled')) {
+          throw phoneRes.error;
+        }
+      } catch (err) {
+        if (!err?.message?.includes('disabled') && !err?.code?.includes('disabled')) {
+          throw err;
+        }
+      }
+
+      // Fallback: If phone provider is disabled in Supabase, use virtual email
+      // Database trigger automatically synchronizes cleanPhone into the auth.users.phone column
+      const authEmail = phoneToAuthEmail(cleanPhone);
       const { data, error } = await supabase.auth.signUp({
         email: authEmail,
         password,
@@ -195,7 +272,7 @@ export function AuthProvider({ children }) {
             nic: userMetaData.nic,
             phone: cleanPhone,
             bikeModel: userMetaData.bikeModel,
-            email: userMetaData.email || '' // real email stored in metadata
+            email: ''
           }
         }
       });
