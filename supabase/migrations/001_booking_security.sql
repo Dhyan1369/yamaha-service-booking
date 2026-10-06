@@ -180,11 +180,11 @@ begin
   v_phone := nullif(trim(coalesce(new.raw_user_meta_data->>'phone', '')), '');
   v_email := nullif(trim(coalesce(new.raw_user_meta_data->>'email', '')), '');
 
-  -- 1. Populate the Phone column in auth.users
+  -- 1. Populate the Phone column in auth.users exactly as entered (0XXXXXXXXX, no +94)
   if v_phone is not null then
-    -- Format phone in E.164 (+94...) for Sri Lankan numbers if not already formatted
-    if not v_phone like '+%' and v_phone ~ '^0[0-9]{9}$' then
-      v_phone := '+94' || substr(v_phone, 2);
+    -- Strip +94 prefix if present so phone is always stored in local 0XXXXXXXXX format
+    if v_phone like '+94%' then
+      v_phone := '0' || substr(v_phone, 4);
     end if;
 
     -- Set phone only if it is not already used by another user (avoids duplicate key error 23505)
@@ -212,16 +212,35 @@ create trigger on_auth_user_created_sync_phone
   before insert or update on auth.users
   for each row execute function public.sync_auth_user_phone();
 
--- Update existing registered users safely (avoids duplicate phone conflict if the same number was tested multiple times)
+-- Convert any existing phone numbers starting with +94 to local 0XXXXXXXXX format
+update auth.users
+   set phone = '0' || substr(phone, 4)
+ where phone like '+94%'
+   and not exists (
+     select 1 from auth.users u2
+      where u2.phone = '0' || substr(auth.users.phone, 4)
+        and u2.id <> auth.users.id
+   );
+
+-- Convert any existing raw_user_meta_data phones starting with +94 to local 0XXXXXXXXX format
+update auth.users
+   set raw_user_meta_data = jsonb_set(
+         raw_user_meta_data, 
+         '{phone}', 
+         to_jsonb('0' || substr(raw_user_meta_data->>'phone', 4))
+       )
+ where raw_user_meta_data->>'phone' like '+94%';
+
+-- Populate phone for existing registered users without +94 (safe from duplicate key error)
 with ranked_users as (
   select id,
          case 
-           when (raw_user_meta_data->>'phone') ~ '^0[0-9]{9}$' then '+94' || substr(raw_user_meta_data->>'phone', 2)
+           when (raw_user_meta_data->>'phone') like '+94%' then '0' || substr(raw_user_meta_data->>'phone', 4)
            else raw_user_meta_data->>'phone'
          end as formatted_phone,
          row_number() over (
            partition by case 
-             when (raw_user_meta_data->>'phone') ~ '^0[0-9]{9}$' then '+94' || substr(raw_user_meta_data->>'phone', 2)
+             when (raw_user_meta_data->>'phone') like '+94%' then '0' || substr(raw_user_meta_data->>'phone', 4)
              else raw_user_meta_data->>'phone'
            end 
            order by created_at desc

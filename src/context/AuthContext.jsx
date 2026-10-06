@@ -43,9 +43,14 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  // Convert a phone number to a virtual Supabase-compatible email
+  // Convert a phone number to a virtual Supabase-compatible email (always using 0XXXXXXXXX format, no +94)
   const phoneToAuthEmail = (phone) => {
-    const clean = (phone || '').replace(/[\s-]/g, '');
+    let clean = (phone || '').replace(/[\s-]/g, '');
+    if (clean.startsWith('+94')) {
+      clean = '0' + clean.slice(3);
+    } else if (clean.startsWith('94') && clean.length === 11) {
+      clean = '0' + clean.slice(2);
+    }
     return `${clean}@phone.yamaha.lk`;
   };
 
@@ -77,7 +82,13 @@ export function AuthProvider({ children }) {
         ? rawEmail.replace('@phone.yamaha.lk', '')
         : '';
 
-    const rawPhone = (meta.phone || phoneFromEmail || sbUser.phone || '').replace(/[\s-]/g, '');
+    let rawPhone = (meta.phone || phoneFromEmail || sbUser.phone || '').replace(/[\s-]/g, '');
+    // Ensure 0-prefixed 10-digit format without +94 across the entire system
+    if (rawPhone.startsWith('+94')) {
+      rawPhone = '0' + rawPhone.slice(3);
+    } else if (rawPhone.startsWith('94') && rawPhone.length === 11) {
+      rawPhone = '0' + rawPhone.slice(2);
+    }
 
     // ── SECURITY: Admin status is determined ONLY from server-controlled
     // app_metadata (set via Supabase dashboard / Edge Function, never by the
@@ -96,7 +107,7 @@ export function AuthProvider({ children }) {
       email: displayEmail,
       name: meta.full_name || meta.name || (effectiveAdmin ? 'Admin Manager' : rawPhone || 'Customer'),
       nic:  meta.nic || '',
-      phone: rawPhone,          // always cleaned and normalised
+      phone: rawPhone,          // always formatted exactly as user entered (e.g. 0760755111, no +94)
       bikeModel: meta.bikeModel || meta.bike_model || 'Yamaha Bike',
       avatarUrl: meta.avatarUrl || meta.avatar_url || sbUser.avatarUrl || sbUser.avatar_url || '',
       isAdmin: Boolean(effectiveAdmin),
@@ -140,16 +151,30 @@ export function AuthProvider({ children }) {
         return data;
       }
 
-      const cleanPhone = trimmed.replace(/[\s-]/g, '');
-      const e164 = cleanPhone.startsWith('0') ? `+94${cleanPhone.slice(1)}` : cleanPhone;
+      let cleanPhone = trimmed.replace(/[\s-]/g, '');
+      if (cleanPhone.startsWith('+94')) {
+        cleanPhone = '0' + cleanPhone.slice(3);
+      } else if (cleanPhone.startsWith('94') && cleanPhone.length === 11) {
+        cleanPhone = '0' + cleanPhone.slice(2);
+      }
 
-      // 1. Try native phone login first (if Phone Provider is enabled on Supabase)
+      // 1. Try native phone login first with cleanPhone
       const phoneRes = await supabase.auth
-        .signInWithPassword({ phone: e164, password })
+        .signInWithPassword({ phone: cleanPhone, password })
         .catch(() => null);
 
       if (phoneRes?.data?.session) {
         return phoneRes.data;
+      }
+
+      // Also try with +94 in case an older account has +94 in auth.users.phone
+      const e164 = cleanPhone.startsWith('0') ? `+94${cleanPhone.slice(1)}` : `+94${cleanPhone}`;
+      const phoneE164Res = await supabase.auth
+        .signInWithPassword({ phone: e164, password })
+        .catch(() => null);
+
+      if (phoneE164Res?.data?.session) {
+        return phoneE164Res.data;
       }
 
       // 2. Check if this phone number belongs to an account registered with a real email
@@ -168,7 +193,7 @@ export function AuthProvider({ children }) {
         // Fall through to virtual email
       }
 
-      // 3. Fallback: virtual email lookup
+      // 3. Fallback: virtual email lookup (0XXXXXXXXX@phone.yamaha.lk)
       const virtualEmail = phoneToAuthEmail(cleanPhone);
       const { data, error } = await supabase.auth.signInWithPassword({
         email: virtualEmail,
@@ -180,7 +205,10 @@ export function AuthProvider({ children }) {
     }
 
     // ── Offline / localStorage fallback (development only) ──────────────────
-    const cleanInput = (phoneOrEmail || '').trim().replace(/[\s-]/g, '');
+    let cleanInput = (phoneOrEmail || '').trim().replace(/[\s-]/g, '');
+    if (cleanInput.startsWith('+94')) {
+      cleanInput = '0' + cleanInput.slice(3);
+    }
     const localUsers = JSON.parse(localStorage.getItem('yamaha_local_users') || '[]');
     // Compare against the stored SHA-256 hash, not the plain-text password.
     const inputHash = await hashPassword(password);
@@ -204,16 +232,21 @@ export function AuthProvider({ children }) {
   };
 
   // ── Sign Up ────────────────────────────────────────────────────────────────
-  // Phone is required; email is optional (stored in metadata for password reset)
+  // Phone is required; saved exactly as user typed (e.g. 0XXXXXXXXX, no +94)
   const signUpWithPhonePassword = async (phone, password, userMetaData = {}) => {
-    const cleanPhone = (phone || '').replace(/[\s-]/g, '');
+    let cleanPhone = (phone || '').replace(/[\s-]/g, '');
+    if (cleanPhone.startsWith('+94')) {
+      cleanPhone = '0' + cleanPhone.slice(3);
+    } else if (cleanPhone.startsWith('94') && cleanPhone.length === 11) {
+      cleanPhone = '0' + cleanPhone.slice(2);
+    }
+
     const realEmail = (userMetaData.email || '').trim().toLowerCase();
     const hasRealEmail = realEmail && realEmail.includes('@');
-    const e164 = cleanPhone.startsWith('0') ? `+94${cleanPhone.slice(1)}` : cleanPhone;
 
     if (isSupabaseConfigured && supabase) {
       // CASE 1: User provided BOTH email and phone number!
-      // Register with their real email in the Email column, and phone in metadata/trigger
+      // Register with their real email in the Email column, and phone exactly as entered in metadata/trigger
       if (hasRealEmail) {
         const { data, error } = await supabase.auth.signUp({
           email: realEmail,
@@ -233,35 +266,8 @@ export function AuthProvider({ children }) {
       }
 
       // CASE 2: User provided ONLY phone number (no email)
-      // Try native phone signup first (if Phone provider is enabled in Supabase)
-      try {
-        const phoneRes = await supabase.auth.signUp({
-          phone: e164,
-          password,
-          options: {
-            data: {
-              name: userMetaData.name,
-              nic: userMetaData.nic,
-              phone: cleanPhone,
-              bikeModel: userMetaData.bikeModel,
-              email: ''
-            }
-          }
-        });
-        if (!phoneRes.error && phoneRes.data?.user) {
-          return phoneRes.data;
-        }
-        if (phoneRes.error && !phoneRes.error.message?.includes('disabled')) {
-          throw phoneRes.error;
-        }
-      } catch (err) {
-        if (!err?.message?.includes('disabled') && !err?.code?.includes('disabled')) {
-          throw err;
-        }
-      }
-
-      // Fallback: If phone provider is disabled in Supabase, use virtual email
-      // Database trigger automatically synchronizes cleanPhone into the auth.users.phone column
+      // Save directly with virtual email (0XXXXXXXXX@phone.yamaha.lk) so phone SMS provider is not required,
+      // and database trigger automatically saves cleanPhone (0XXXXXXXXX, no +94) directly to auth.users.phone
       const authEmail = phoneToAuthEmail(cleanPhone);
       const { data, error } = await supabase.auth.signUp({
         email: authEmail,
@@ -374,6 +380,13 @@ export function AuthProvider({ children }) {
 
   // ── Update Profile ─────────────────────────────────────────────────────────
   const updateCustomerProfile = async (profileData) => {
+    let cleanPhone = (profileData.phone || '').trim().replace(/[\s-]/g, '');
+    if (cleanPhone.startsWith('+94')) {
+      cleanPhone = '0' + cleanPhone.slice(3);
+    } else if (cleanPhone.startsWith('94') && cleanPhone.length === 11) {
+      cleanPhone = '0' + cleanPhone.slice(2);
+    }
+
     if (isSupabaseConfigured && supabase && user?.rawUser) {
       const rawAvatar = profileData.avatarUrl ?? (user?.avatarUrl || '');
       // Prevent Base64 strings from bloating JWT auth headers (causes HTTP 431)
@@ -383,7 +396,7 @@ export function AuthProvider({ children }) {
         data: {
           name: profileData.name,
           full_name: profileData.name,
-          phone: profileData.phone,
+          phone: cleanPhone || profileData.phone,
           nic: profileData.nic,
           bikeModel: profileData.bikeModel,
           email: profileData.email || '',

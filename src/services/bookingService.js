@@ -35,12 +35,18 @@ export const calculateSlotTime = (token) => {
 // Converts Supabase PostgreSQL snake_case columns to Frontend camelCase properties
 const mapBookingFromDb = (row) => {
   if (!row) return null;
+  let rawPhone = (row.phone || '').trim();
+  if (rawPhone.startsWith('+94')) {
+    rawPhone = '0' + rawPhone.slice(3);
+  } else if (rawPhone.startsWith('94') && rawPhone.length === 11) {
+    rawPhone = '0' + rawPhone.slice(2);
+  }
   return {
     id: row.id,
     tokenNo: row.token_no ?? row.tokenNo,
     timeSlot: row.time_slot ?? row.timeSlot,
     name: row.name,
-    phone: row.phone,
+    phone: rawPhone,
     nic: row.nic,
     bikeModel: row.bike_model ?? row.bikeModel,
     mileage: row.mileage || '',
@@ -143,13 +149,20 @@ export const bookingService = {
         throw new Error('This vehicle already has a booking for the selected date.');
       }
 
+      let cleanPhone = (bookingData.phone || '').trim().replace(/[\s-]/g, '');
+      if (cleanPhone.startsWith('+94')) {
+        cleanPhone = '0' + cleanPhone.slice(3);
+      } else if (cleanPhone.startsWith('94') && cleanPhone.length === 11) {
+        cleanPhone = '0' + cleanPhone.slice(2);
+      }
+
       const nextToken = dayActive.length + 1;
       const newBooking = {
         id: 'local_bk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
         tokenNo: nextToken,
         timeSlot: calculateSlotTime(nextToken),
         name: bookingData.name.trim(),
-        phone: bookingData.phone.trim().replace(/[\s-]/g, ''),
+        phone: cleanPhone,
         nic: bookingData.nic ? bookingData.nic.trim().toUpperCase() : 'N/A',
         bikeModel: bookingData.bikeModel.trim(),
         mileage: bookingData.mileage ? String(bookingData.mileage).trim() : '',
@@ -166,10 +179,17 @@ export const bookingService = {
       return newBooking;
     }
 
+    let cleanPhone = (bookingData.phone || '').trim().replace(/[\s-]/g, '');
+    if (cleanPhone.startsWith('+94')) {
+      cleanPhone = '0' + cleanPhone.slice(3);
+    } else if (cleanPhone.startsWith('94') && cleanPhone.length === 11) {
+      cleanPhone = '0' + cleanPhone.slice(2);
+    }
+
     const { data: rpcData, error: rpcError } = await supabase.rpc('create_booking_transaction', {
       p_date: bookingData.date,
       p_name: bookingData.name,
-      p_phone: bookingData.phone,
+      p_phone: cleanPhone,
       p_nic: bookingData.nic,
       p_bike_model: bookingData.bikeModel,
       p_vehicle_no: bookingData.vehicleNo,
