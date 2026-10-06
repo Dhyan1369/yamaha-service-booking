@@ -4,6 +4,7 @@ import {
   bookingService, 
   MAX_DAILY_SLOTS, 
   MAX_FREE_SERVICES,
+  MAX_STANDARD_SERVICES,
   calculateSlotTime 
 } from '../services/bookingService';
 
@@ -111,21 +112,32 @@ export function useBookings() {
     const serverStats = availability[date];
     const totalBooked = serverStats?.totalBooked ?? dayBookings.length;
     const freeServices = serverStats?.freeServices ?? dayBookings.filter((b) => b.serviceType === 'Free Service').length;
+    const standardServices = serverStats?.standardServices ?? dayBookings.filter(
+      (b) => b.serviceType === 'Full Service' || b.serviceType === 'Normal Service'
+    ).length;
+
     const isDayFull = totalBooked >= MAX_DAILY_SLOTS;
     const isFreeServiceFull = freeServices >= MAX_FREE_SERVICES;
+    const isStandardServiceFull = standardServices >= MAX_STANDARD_SERVICES;
+
     const availableSlots = Math.max(0, MAX_DAILY_SLOTS - totalBooked);
     const availableFreeSlots = Math.max(0, MAX_FREE_SERVICES - freeServices);
+    const availableStandardSlots = Math.max(0, MAX_STANDARD_SERVICES - standardServices);
 
     return {
       dayBookings,
       totalBooked,
       freeServices,
+      standardServices,
       isDayFull,
       isFreeServiceFull,
+      isStandardServiceFull,
       availableSlots,
       availableFreeSlots,
+      availableStandardSlots,
       maxDailySlots: MAX_DAILY_SLOTS,
       maxFreeServices: MAX_FREE_SERVICES,
+      maxStandardServices: MAX_STANDARD_SERVICES,
       nextAvailableToken: totalBooked + 1,
       nextSlotTime: calculateSlotTime(totalBooked + 1)
     };

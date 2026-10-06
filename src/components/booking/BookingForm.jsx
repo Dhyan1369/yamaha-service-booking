@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { User, Phone, Wrench, AlertCircle, Clock } from 'lucide-react';
 import Input from '../common/Input';
 import Button from '../common/Button';
@@ -8,13 +9,14 @@ import TokenReceipt from './TokenReceipt';
 import { useAuth } from '../../hooks/useAuth';
 import { useBookings } from '../../hooks/useBookings';
 import { useLanguage } from '../../context/LanguageContext';
-import { POYA_DATES, HOLIDAY_DATES } from '../../services/bookingService';
+import { POYA_DATES, HOLIDAY_DATES, getNextOpenBookingDate } from '../../services/bookingService';
 import { validateBookingData } from '../../lib/validation';
 
 export default function BookingForm({ onBookingSuccess, onCancel }) {
+  const location = useLocation();
   const { user, openAuthModal } = useAuth();
   const { addBooking, getSlotStats, refreshAvailability } = useBookings();
-  const { t } = useLanguage();
+  const { lang, t } = useLanguage();
 
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
@@ -23,26 +25,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
   const [vehicleNo, setVehicleNo] = useState('');
   const [serviceType, setServiceType] = useState('Free Service');
   const [date, setDate] = useState(() => {
-    // Find the next valid open day starting from TOMORROW onward
-    const candidate = new Date();
-    candidate.setDate(candidate.getDate() + 1); // Earliest bookable day is tomorrow!
-    for (let i = 0; i < 14; i++) {
-      const y = candidate.getFullYear();
-      const m = String(candidate.getMonth() + 1).padStart(2, '0');
-      const d = String(candidate.getDate()).padStart(2, '0');
-      const key = `${y}-${m}-${d}`;
-      const dow = candidate.getDay(); // 0=Sun, 1=Mon
-      if (dow !== 1 && !POYA_DATES.has(key) && !HOLIDAY_DATES.has(key)) {
-        return key;
-      }
-      candidate.setDate(candidate.getDate() + 1);
-    }
-    const tmr = new Date();
-    tmr.setDate(tmr.getDate() + 1);
-    const y = tmr.getFullYear();
-    const m = String(tmr.getMonth() + 1).padStart(2, '0');
-    const d = String(tmr.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return location.state?.selectedDate || getNextOpenBookingDate();
   });
 
   const [createdBooking, setCreatedBooking] = useState(null);
@@ -123,6 +106,11 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
 
     if (serviceType === 'Free Service' && stats.isFreeServiceFull) {
       setErrorMessage(t('booking.errFreeQuotaFull'));
+      return;
+    }
+
+    if ((serviceType === 'Full Service' || serviceType === 'Normal Service') && stats.isStandardServiceFull) {
+      setErrorMessage(t('booking.errStandardQuotaFull'));
       return;
     }
 
@@ -211,10 +199,18 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
               <option value="Free Service" disabled={stats.isFreeServiceFull}>
                 {stats.isFreeServiceFull 
                   ? t('booking.freeServiceFull') 
-                  : `${t('booking.freeService')} (${stats.availableFreeSlots} ${t('booking.freeServiceSlotsLeft')})`}
+                  : `${t('booking.freeService')} (${stats.availableFreeSlots} / ${stats.maxFreeServices} ${t('booking.freeServiceSlotsLeft')})`}
               </option>
-              <option value="Full Service">{t('booking.fullService')}</option>
-              <option value="Normal Service">{t('booking.normalService')}</option>
+              <option value="Full Service" disabled={stats.isStandardServiceFull}>
+                {stats.isStandardServiceFull
+                  ? `${t('booking.fullService')} (${t('booking.standardQuotaFull')})`
+                  : `${t('booking.fullService')} (${stats.availableStandardSlots} / ${stats.maxStandardServices} ${t('booking.freeServiceSlotsLeft')})`}
+              </option>
+              <option value="Normal Service" disabled={stats.isStandardServiceFull}>
+                {stats.isStandardServiceFull
+                  ? `${t('booking.normalService')} (${t('booking.standardQuotaFull')})`
+                  : `${t('booking.normalService')} (${stats.availableStandardSlots} / ${stats.maxStandardServices} ${t('booking.freeServiceSlotsLeft')})`}
+              </option>
             </select>
           </div>
         </div>
@@ -242,13 +238,19 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
           <div className="flex justify-between items-center text-slate-300">
             <span>{t('booking.dateAvailability')}</span>
             <span className={`font-bold ${stats.isDayFull ? 'text-red-400' : 'text-green-400'}`}>
-              {stats.isDayFull ? t('booking.full') : `${stats.availableSlots} ${t('booking.slotsAvailable')}`}
+              {stats.isDayFull ? t('booking.full') : `${stats.availableSlots} / ${stats.maxDailySlots} ${t('booking.slotsAvailable')}`}
             </span>
           </div>
           <div className="flex justify-between items-center text-slate-300">
             <span>{t('booking.freeQuota')}</span>
             <span className={`font-bold ${stats.isFreeServiceFull ? 'text-red-400' : 'text-blue-400'}`}>
-              {stats.isFreeServiceFull ? t('booking.quotaReached') : `${stats.availableFreeSlots} ${t('booking.of5Left')}`}
+              {stats.isFreeServiceFull ? t('booking.quotaReached') : `${stats.availableFreeSlots} / ${stats.maxFreeServices} ${t('booking.of5Left')}`}
+            </span>
+          </div>
+          <div className="flex justify-between items-center text-slate-300">
+            <span>{t('booking.standardQuota')}</span>
+            <span className={`font-bold ${stats.isStandardServiceFull ? 'text-red-400' : 'text-purple-400'}`}>
+              {stats.isStandardServiceFull ? t('booking.standardQuotaFull') : `${stats.availableStandardSlots} / ${stats.maxStandardServices} ${t('booking.of7Left')}`}
             </span>
           </div>
           {!stats.isDayFull && (

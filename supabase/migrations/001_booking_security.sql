@@ -23,6 +23,9 @@ create table if not exists public.bookings (
   constraint bookings_date_vehicle_unique unique (date, vehicle_no)
 );
 
+-- Ensure mileage column exists if table already existed prior to migration
+alter table public.bookings add column if not exists mileage text;
+
 create index if not exists bookings_user_id_idx on public.bookings(user_id);
 create index if not exists bookings_date_idx on public.bookings(date);
 
@@ -45,6 +48,10 @@ create policy bookings_admin_update_policy on public.bookings
   using (coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin')
   with check (coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin');
 
+-- Drop existing functions first if return types or signatures changed
+drop function if exists public.get_booking_availability(date);
+drop function if exists public.get_booking_availability;
+
 create or replace function public.get_booking_availability(p_date date)
 returns jsonb
 language plpgsql
@@ -54,29 +61,38 @@ as $$
 declare
   total_booked integer;
   free_services integer;
+  standard_services integer;
 begin
   if auth.uid() is null then
     raise exception 'AUTH_REQUIRED';
   end if;
 
   select count(*) filter (where status <> 'Cancelled'),
-         count(*) filter (where service_type = 'Free Service' and status <> 'Cancelled')
-    into total_booked, free_services
+         count(*) filter (where service_type = 'Free Service' and status <> 'Cancelled'),
+         count(*) filter (where service_type in ('Full Service', 'Normal Service') and status <> 'Cancelled')
+    into total_booked, free_services, standard_services
     from public.bookings
    where date = p_date;
 
   return jsonb_build_object(
     'totalBooked', total_booked,
     'freeServices', free_services,
+    'standardServices', standard_services,
     'availableSlots', greatest(0, 12 - total_booked),
     'availableFreeSlots', greatest(0, 5 - free_services),
+    'availableStandardSlots', greatest(0, 7 - standard_services),
     'maxDailySlots', 12,
-    'maxFreeServices', 5
+    'maxFreeServices', 5,
+    'maxStandardServices', 7
   );
 end;
 $$;
 
 grant execute on function public.get_booking_availability(date) to authenticated;
+
+-- Drop existing function to avoid ERROR 42P13 (cannot change return type of existing function)
+drop function if exists public.create_booking_transaction(date, text, text, text, text, text, text, uuid);
+drop function if exists public.create_booking_transaction;
 
 create or replace function public.create_booking_transaction(
   p_date date,
@@ -98,6 +114,7 @@ declare
   created_booking public.bookings;
   total_booked integer;
   free_services integer;
+  standard_services integer;
   is_admin boolean := coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin';
   booking_user_id uuid := auth.uid();
 begin
@@ -127,8 +144,9 @@ begin
   perform pg_advisory_xact_lock(hashtext(p_date::text));
 
   select count(*) filter (where status <> 'Cancelled'),
-         count(*) filter (where service_type = 'Free Service' and status <> 'Cancelled')
-    into total_booked, free_services
+         count(*) filter (where service_type = 'Free Service' and status <> 'Cancelled'),
+         count(*) filter (where service_type in ('Full Service', 'Normal Service') and status <> 'Cancelled')
+    into total_booked, free_services, standard_services
     from public.bookings
    where date = p_date;
 
@@ -137,6 +155,9 @@ begin
   end if;
   if p_service_type = 'Free Service' and free_services >= 5 then
     raise exception 'FREE_SERVICE_FULL';
+  end if;
+  if p_service_type in ('Full Service', 'Normal Service') and standard_services >= 7 then
+    raise exception 'STANDARD_SERVICE_FULL';
   end if;
 
   next_token := total_booked + 1;
@@ -262,6 +283,9 @@ update auth.users u
    );
 
 -- Lookup email by phone number to allow login using phone when real email was registered
+drop function if exists public.get_email_by_phone(text);
+drop function if exists public.get_email_by_phone;
+
 create or replace function public.get_email_by_phone(p_phone text)
 returns text
 language plpgsql

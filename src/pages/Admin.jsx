@@ -110,7 +110,13 @@ export default function Admin() {
     }
 
     if (walkInForm.serviceType === 'Free Service' && stats.isFreeServiceFull) {
-      setWalkInError('The free-service quota for this date has been reached.');
+      setWalkInError('The free-service quota for this date has been reached (Maximum 5 slots).');
+      setWalkInSubmitting(false);
+      return;
+    }
+
+    if ((walkInForm.serviceType === 'Full Service' || walkInForm.serviceType === 'Normal Service') && stats.isStandardServiceFull) {
+      setWalkInError('The quota for Full & Normal services for this date has been reached (Maximum 7 slots).');
       setWalkInSubmitting(false);
       return;
     }
@@ -192,10 +198,10 @@ export default function Admin() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
           <div className="flex justify-between items-center text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Today's Tokens</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Date Tokens</span>
             <Clock className="w-4 h-4 text-blue-400" />
           </div>
           <div className="flex items-baseline justify-between mt-2">
@@ -203,7 +209,7 @@ export default function Admin() {
               {stats.totalBooked} <span className="text-sm font-normal text-slate-500">/ {stats.maxDailySlots}</span>
             </p>
             <span className="text-xs font-bold text-blue-400">
-              {Math.round((stats.totalBooked / stats.maxDailySlots) * 100)}% Capacity
+              {Math.round((stats.totalBooked / stats.maxDailySlots) * 100)}% Cap
             </span>
           </div>
           <div className="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
@@ -237,7 +243,28 @@ export default function Admin() {
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
           <div className="flex justify-between items-center text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Workshop Progress</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Full & Normal Quota</span>
+            <Wrench className="w-4 h-4 text-purple-400" />
+          </div>
+          <div className="flex items-baseline justify-between mt-2">
+            <p className="text-3xl font-black text-white">
+              {stats.standardServices || 0} <span className="text-sm font-normal text-slate-500">/ {stats.maxStandardServices || 7}</span>
+            </p>
+            <span className={`text-xs font-bold ${stats.isStandardServiceFull ? 'text-red-400' : 'text-purple-400'}`}>
+              {stats.isStandardServiceFull ? 'Quota Full' : `${stats.availableStandardSlots} Left`}
+            </span>
+          </div>
+          <div className="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+            <div
+              className={`h-full ${stats.isStandardServiceFull ? 'bg-red-500' : 'bg-purple-500'}`}
+              style={{ width: `${Math.min(100, ((stats.standardServices || 0) / (stats.maxStandardServices || 7)) * 100)}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wider">Progress</span>
             <CheckCircle2 className="w-4 h-4 text-green-400" />
           </div>
           <div className="flex items-baseline justify-between mt-2">
@@ -248,8 +275,8 @@ export default function Admin() {
               {stats.totalBooked > 0 ? Math.round((completedCount / stats.totalBooked) * 100) : 0}% Done
             </span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-3">
-            {stats.totalBooked - completedCount} bikes pending service for {selectedDate}
+          <p className="text-[11px] text-slate-500 mt-3 truncate">
+            {stats.totalBooked - completedCount} bikes pending for {selectedDate}
           </p>
         </div>
       </div>
@@ -546,9 +573,15 @@ export default function Admin() {
               onChange={(e) => setWalkInForm({ ...walkInForm, serviceType: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 text-white text-sm rounded-xl px-3.5 py-2.5 outline-none focus:border-blue-500"
             >
-              <option value="Full Service">Full Service</option>
-              <option value="Free Service">Free Service</option>
-              <option value="Normal Service">Normal Service</option>
+              <option value="Full Service" disabled={stats.isStandardServiceFull}>
+                Full Service {stats.isStandardServiceFull ? '(Quota Full - 7/7)' : `(${stats.availableStandardSlots} / ${stats.maxStandardServices || 7} left)`}
+              </option>
+              <option value="Free Service" disabled={stats.isFreeServiceFull}>
+                Free Service {stats.isFreeServiceFull ? '(Quota Full - 5/5)' : `(${stats.availableFreeSlots} / ${stats.maxFreeServices || 5} left)`}
+              </option>
+              <option value="Normal Service" disabled={stats.isStandardServiceFull}>
+                Normal Service {stats.isStandardServiceFull ? '(Quota Full - 7/7)' : `(${stats.availableStandardSlots} / ${stats.maxStandardServices || 7} left)`}
+              </option>
             </select>
           </div>
 

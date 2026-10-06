@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const MAX_DAILY_SLOTS = 12;
 export const MAX_FREE_SERVICES = 5;
+export const MAX_STANDARD_SERVICES = 7; // Full Service + Normal Service = 7 slots per day
 
 export const POYA_DATES = new Set([
   '2026-01-03', '2026-02-01', '2026-03-03', '2026-04-02', '2026-05-01',
@@ -19,6 +20,22 @@ export const toDateKey = (date) => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+export const getNextOpenBookingDate = () => {
+  const candidate = new Date();
+  candidate.setDate(candidate.getDate() + 1); // Earliest bookable day is tomorrow (advance booking rule)
+  for (let i = 0; i < 30; i++) {
+    const key = toDateKey(candidate);
+    const dow = candidate.getDay(); // 0=Sun, 1=Mon
+    if (dow !== 1 && !POYA_DATES.has(key) && !HOLIDAY_DATES.has(key)) {
+      return key;
+    }
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  const tmr = new Date();
+  tmr.setDate(tmr.getDate() + 1);
+  return toDateKey(tmr);
 };
 
 export const calculateSlotTime = (token) => {
@@ -97,13 +114,19 @@ export const bookingService = {
       const activeBookings = localBookings.filter((b) => b.date === date && b.status !== 'Cancelled');
       const totalBooked = activeBookings.length;
       const freeServices = activeBookings.filter((b) => b.serviceType === 'Free Service').length;
+      const standardServices = activeBookings.filter(
+        (b) => b.serviceType === 'Full Service' || b.serviceType === 'Normal Service'
+      ).length;
       return {
         totalBooked,
         freeServices,
+        standardServices,
         availableSlots: Math.max(0, MAX_DAILY_SLOTS - totalBooked),
         availableFreeSlots: Math.max(0, MAX_FREE_SERVICES - freeServices),
+        availableStandardSlots: Math.max(0, MAX_STANDARD_SERVICES - standardServices),
         maxDailySlots: MAX_DAILY_SLOTS,
-        maxFreeServices: MAX_FREE_SERVICES
+        maxFreeServices: MAX_FREE_SERVICES,
+        maxStandardServices: MAX_STANDARD_SERVICES
       };
     }
     const { data, error } = await supabase.rpc('get_booking_availability', { p_date: date });
@@ -138,7 +161,16 @@ export const bookingService = {
       if (bookingData.serviceType === 'Free Service') {
         const freeCount = dayActive.filter((b) => b.serviceType === 'Free Service').length;
         if (freeCount >= MAX_FREE_SERVICES) {
-          throw new Error('The free-service quota for this date has been reached.');
+          throw new Error('The free-service quota for this date has been reached (Maximum 5 slots).');
+        }
+      }
+
+      if (bookingData.serviceType === 'Full Service' || bookingData.serviceType === 'Normal Service') {
+        const standardCount = dayActive.filter(
+          (b) => b.serviceType === 'Full Service' || b.serviceType === 'Normal Service'
+        ).length;
+        if (standardCount >= MAX_STANDARD_SERVICES) {
+          throw new Error('The quota for Full & Normal services for this date has been reached (Maximum 7 slots).');
         }
       }
 
@@ -202,7 +234,10 @@ export const bookingService = {
       throw new Error('Sorry, all 12 service slots for this date are already fully booked!');
     }
     if (rpcError?.message?.includes('FREE_SERVICE_FULL')) {
-      throw new Error('The free-service quota for this date has been reached.');
+      throw new Error('The free-service quota for this date has been reached (Maximum 5 slots).');
+    }
+    if (rpcError?.message?.includes('STANDARD_SERVICE_FULL')) {
+      throw new Error('The quota for Full & Normal services for this date has been reached (Maximum 7 slots).');
     }
     if (rpcError?.message?.includes('DUPLICATE_BOOKING')) {
       throw new Error('This vehicle already has a booking for the selected date.');

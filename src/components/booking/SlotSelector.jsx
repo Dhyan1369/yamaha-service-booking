@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, Lock, Clock } from 'lucide-react';
 import { POYA_DATES, HOLIDAY_DATES, toDateKey } from '../../services/bookingService';
 import { useLanguage } from '../../context/LanguageContext';
@@ -7,10 +7,13 @@ export default function SlotSelector({
   selectedDate,
   onDateChange,
   label,
-  disabled = false
+  disabled = false,
+  defaultOpen = false,
+  keepOpen = false,
+  inline = false
 }) {
   const { lang, t } = useLanguage();
-  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(defaultOpen);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     if (selectedDate) {
       const parts = selectedDate.split('-');
@@ -21,6 +24,21 @@ export default function SlotSelector({
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+
+  useEffect(() => {
+    if (defaultOpen) {
+      setCalendarOpen(true);
+    }
+  }, [defaultOpen]);
+
+  useEffect(() => {
+    if (selectedDate) {
+      const parts = selectedDate.split('-');
+      if (parts.length === 3) {
+        setCalendarMonth(new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1));
+      }
+    }
+  }, [selectedDate]);
 
   const displayLabel = label || t('booking.selectDate');
 
@@ -101,7 +119,10 @@ export default function SlotSelector({
         </button>
 
         {calendarOpen && (
-          <div className="absolute z-30 top-full mt-2 left-0 right-0 bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl">
+          <div className={inline 
+            ? "mt-3 bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl relative" 
+            : "absolute z-30 top-full mt-2 left-0 right-0 bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl"
+          }>
             {/* Month Navigation */}
             <div className="flex items-center justify-between mb-4">
               <button
@@ -171,7 +192,9 @@ export default function SlotSelector({
                     onClick={() => {
                       if (!isClosed) {
                         onDateChange(dateKey);
-                        setCalendarOpen(false);
+                        if (!keepOpen) {
+                          setCalendarOpen(false);
+                        }
                       }
                     }}
                     className={`relative h-9 rounded-lg text-xs font-medium transition ${
