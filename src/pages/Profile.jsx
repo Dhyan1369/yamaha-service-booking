@@ -141,7 +141,7 @@ export default function Profile() {
         </div>
         <h2 className="text-2xl font-bold text-white mb-2">{t('profile.loginRequired')}</h2>
         <p className="text-xs text-slate-400 mb-6">{t('profile.loginRequiredDesc')}</p>
-        <Button variant="primary" size="md" onClick={openAuthModal}>
+        <Button variant="primary" size="md" onClick={() => openAuthModal('signin')}>
           {t('profile.loginBtn')}
         </Button>
       </div>

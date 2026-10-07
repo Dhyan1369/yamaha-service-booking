@@ -35,6 +35,7 @@ export default function Admin() {
   const [showWalkInModal, setShowWalkInModal] = useState(false);
   const [walkInSubmitting, setWalkInSubmitting] = useState(false);
   const [walkInError, setWalkInError] = useState('');
+  const [statusUpdateError, setStatusUpdateError] = useState('');
 
   const [walkInForm, setWalkInForm] = useState({
     name: '',
@@ -67,8 +68,32 @@ export default function Admin() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleStatusChange = async (id, newStatus) => {
-    await updateStatus(id, newStatus);
+  const todayKey = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  })();
+
+  const handleStatusChange = async (item, newStatus) => {
+    const isFuture = item.date > todayKey;
+    if (isFuture && (newStatus === 'In-Service' || newStatus === 'Completed')) {
+      setStatusUpdateError(`Cannot set status to ${newStatus} before the scheduled service date (${item.date}). The bike has not arrived yet.`);
+      return;
+    }
+
+    if (newStatus === 'Cancelled') {
+      const confirmed = window.confirm(
+        `Are you sure you want to CANCEL Token #${item.tokenNo} for ${item.name} (${item.date})? This will immediately free up the slot for others.`
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      setStatusUpdateError('');
+      await updateStatus(item.id, newStatus, item.date);
+    } catch (err) {
+      console.error('Failed to change status:', err);
+      setStatusUpdateError(err.message || 'Failed to update booking status.');
+    }
   };
 
   const handleWalkInSubmit = async (e) => {
@@ -390,6 +415,21 @@ export default function Admin() {
           </div>
         </div>
 
+        {statusUpdateError && (
+          <div className="mx-6 mt-4 p-3 bg-red-950/70 border border-red-800 text-red-300 rounded-xl text-xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+              <span>{statusUpdateError}</span>
+            </div>
+            <button
+              onClick={() => setStatusUpdateError('')}
+              className="text-red-400 hover:text-red-200 text-xs font-bold px-2 py-0.5"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-300 min-w-[720px]">
             <thead className="bg-slate-950 text-slate-400 text-xs uppercase tracking-wider font-semibold">
@@ -401,7 +441,7 @@ export default function Admin() {
                 <th className="px-6 py-3.5">Bike Model</th>
                 <th className="px-6 py-3.5">Plate No</th>
                 <th className="px-6 py-3.5">Type</th>
-                <th className="px-6 py-3.5">Update Status</th>
+                <th className="px-6 py-3.5 whitespace-nowrap w-36">Update Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900">
@@ -468,25 +508,35 @@ export default function Admin() {
                           {item.serviceType}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <select
-                          value={item.status}
-                          onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                          className={`text-xs rounded-lg px-2.5 py-1 text-white outline-none border font-semibold ${
-                            item.status === 'Completed'
-                              ? 'bg-green-950 border-green-800 text-green-300'
-                              : item.status === 'In-Service'
-                              ? 'bg-amber-950 border-amber-800 text-amber-300'
-                              : item.status === 'Cancelled'
-                              ? 'bg-red-950 border-red-800 text-red-300'
-                              : 'bg-slate-950 border-slate-700 text-slate-300'
-                          }`}
-                        >
-                          <option value="Pending">Pending</option>
-                          <option value="In-Service">In-Service</option>
-                          <option value="Completed">Completed</option>
-                          <option value="Cancelled">Cancelled</option>
-                        </select>
+                      <td className="px-6 py-4 whitespace-nowrap w-36">
+                        {(() => {
+                          const isFuture = item.date > todayKey;
+                          return (
+                            <select
+                              value={item.status}
+                              onChange={(e) => handleStatusChange(item, e.target.value)}
+                              title={isFuture ? 'Service date has not arrived yet' : ''}
+                              className={`w-28 text-xs rounded-lg px-2.5 py-1 text-white outline-none border font-semibold cursor-pointer transition ${
+                                item.status === 'Completed'
+                                  ? 'bg-green-950 border-green-800 text-green-300'
+                                  : item.status === 'In-Service'
+                                  ? 'bg-amber-950 border-amber-800 text-amber-300'
+                                  : item.status === 'Cancelled'
+                                  ? 'bg-red-950 border-red-800 text-red-300'
+                                  : 'bg-slate-950 border-slate-700 text-slate-300'
+                              }`}
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="In-Service" disabled={isFuture}>
+                                In-Service
+                              </option>
+                              <option value="Completed" disabled={isFuture}>
+                                Completed
+                              </option>
+                              <option value="Cancelled">Cancelled</option>
+                            </select>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))}

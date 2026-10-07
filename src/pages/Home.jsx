@@ -12,7 +12,7 @@ import SlotSelector from '../components/booking/SlotSelector';
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, openAuthModal } = useAuth();
   const { lang, t } = useLanguage();
   const { getSlotStats, refreshAvailability } = useBookings();
   const [showSlots, setShowSlots] = useState(false);
@@ -31,6 +31,11 @@ export default function Home() {
     // If logged-in user is an Admin, redirect to Admin Workshop Dashboard
     if (user?.isAdmin) {
       navigate('/admin');
+      return;
+    }
+    // If not registered/logged-in, prompt user to sign up / sign in with seamless redirect to booking
+    if (!user) {
+      openAuthModal('signup', '/booking');
       return;
     }
     navigate('/booking');
@@ -190,6 +195,8 @@ export default function Home() {
                     onClick={() => {
                       if (user?.isAdmin) {
                         navigate('/admin');
+                      } else if (!user) {
+                        openAuthModal('signup', '/booking');
                       } else {
                         navigate('/booking', { state: { selectedDate: selectedSlotDate } });
                       }

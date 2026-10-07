@@ -33,7 +33,7 @@ function ProtectedAdminRoute({ children }) {
           The Admin Portal is reserved for workshop managers. Please sign in with an Administrator account.
         </p>
         <button
-          onClick={openAuthModal}
+          onClick={() => openAuthModal('signin')}
           className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-2 rounded-xl transition"
         >
           Sign In as Admin
@@ -47,7 +47,7 @@ function ProtectedAdminRoute({ children }) {
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { showAuthModal, closeAuthModal } = useAuth();
+  const { showAuthModal, closeAuthModal, authModalMode, authRedirectPath } = useAuth();
 
   return (
     <LanguageProvider>
@@ -73,7 +73,12 @@ export default function App() {
         </main>
 
         {/* Global Auth Modal */}
-        <AuthModal isOpen={showAuthModal} onClose={closeAuthModal} />
+        <AuthModal
+          isOpen={showAuthModal}
+          onClose={closeAuthModal}
+          initialMode={authModalMode}
+          redirectTo={authRedirectPath}
+        />
 
         {/* Bottom Footer */}
         <Footer />
