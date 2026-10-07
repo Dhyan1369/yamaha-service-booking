@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { User, Phone, Wrench, AlertCircle, Clock } from 'lucide-react';
 import Input from '../common/Input';
 import Button from '../common/Button';
@@ -14,8 +14,9 @@ import { validateBookingData } from '../../lib/validation';
 
 export default function BookingForm({ onBookingSuccess, onCancel }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, openAuthModal } = useAuth();
-  const { addBooking, getSlotStats, refreshAvailability } = useBookings();
+  const { addBooking, getSlotStats, refreshAvailability, refreshBookings } = useBookings();
   const { lang, t } = useLanguage();
 
   const [name, setName] = useState(user?.name || '');
@@ -50,7 +51,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
     setErrorMessage('');
 
     if (!user) {
-      openAuthModal();
+      openAuthModal('signin');
       return;
     }
 
@@ -139,6 +140,37 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
       setErrorMessage(err.message || 'Booking creation failed. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleReceiptDone = () => {
+    setShowReceipt(false);
+    if (date) {
+      refreshAvailability(date);
+    }
+    refreshBookings();
+
+    if (onBookingSuccess) {
+      onBookingSuccess(createdBooking);
+    }
+
+    if (onCancel) {
+      onCancel();
+      return;
+    }
+
+    if (user?.isAdmin) {
+      navigate('/admin');
+    } else if (user) {
+      navigate('/dashboard', {
+        state: {
+          newBookingToken: createdBooking?.tokenNo,
+          newBookingDate: createdBooking?.date,
+          newBookingTime: createdBooking?.timeSlot
+        }
+      });
+    } else {
+      navigate('/');
     }
   };
 
@@ -291,10 +323,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
       <TokenReceipt
         isOpen={showReceipt}
         booking={createdBooking}
-        onClose={() => {
-          setShowReceipt(false);
-          if (onCancel) onCancel();
-        }}
+        onClose={handleReceiptDone}
       />
     </>
   );
