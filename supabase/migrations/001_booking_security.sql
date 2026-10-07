@@ -33,6 +33,7 @@ alter table public.bookings enable row level security;
 
 revoke all on public.bookings from anon, authenticated;
 grant select on public.bookings to authenticated;
+grant update on public.bookings to authenticated;
 
 drop policy if exists bookings_select_policy on public.bookings;
 create policy bookings_select_policy on public.bookings
@@ -43,10 +44,21 @@ create policy bookings_select_policy on public.bookings
   );
 
 drop policy if exists bookings_admin_update_policy on public.bookings;
-create policy bookings_admin_update_policy on public.bookings
+drop policy if exists bookings_update_policy on public.bookings;
+create policy bookings_update_policy on public.bookings
   for update to authenticated
-  using (coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin')
-  with check (coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin');
+  using (
+    -- Admin can update any booking
+    coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin'
+    -- Customer can update their own booking if it's currently Pending
+    or (user_id = auth.uid() and status = 'Pending')
+  )
+  with check (
+    -- Admin can set any valid status
+    coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin'
+    -- Customer can ONLY change status to 'Cancelled'
+    or (user_id = auth.uid() and status = 'Cancelled')
+  );
 
 -- Drop existing functions first if return types or signatures changed
 drop function if exists public.get_booking_availability(date);
@@ -183,6 +195,54 @@ revoke all on function public.create_booking_transaction(date, text, text, text,
 grant execute on function public.create_booking_transaction(date, text, text, text, text, text, text, uuid) to authenticated;
 
 -- ============================================================================
+-- Cancel Booking (Callable by Admin or the Booking Owner)
+-- Releases the slot immediately for other customers
+-- ============================================================================
+drop function if exists public.cancel_booking(uuid);
+drop function if exists public.cancel_booking;
+
+create or replace function public.cancel_booking(p_booking_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_booking public.bookings;
+  v_is_admin boolean := coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin';
+begin
+  if auth.uid() is null then
+    raise exception 'AUTH_REQUIRED';
+  end if;
+
+  select * into v_booking
+    from public.bookings
+   where id = p_booking_id;
+
+  if v_booking.id is null then
+    raise exception 'BOOKING_NOT_FOUND';
+  end if;
+
+  if not v_is_admin and (v_booking.user_id is null or v_booking.user_id <> auth.uid()) then
+    raise exception 'NOT_AUTHORIZED';
+  end if;
+
+  if v_booking.status = 'Completed' then
+    raise exception 'CANNOT_CANCEL_COMPLETED';
+  end if;
+
+  update public.bookings
+     set status = 'Cancelled'
+   where id = p_booking_id;
+
+  return jsonb_build_object('success', true, 'id', p_booking_id, 'status', 'Cancelled');
+end;
+$$;
+
+revoke all on function public.cancel_booking(uuid) from public, anon;
+grant execute on function public.cancel_booking(uuid) to authenticated;
+
+-- ============================================================================
 -- Auto-sync Phone & Email on auth.users
 -- Automatically sets auth.users.phone from user_metadata so the 'Phone' column
 -- in Supabase Auth dashboard is properly populated instead of showing '-'
@@ -313,3 +373,11 @@ $$;
 
 grant execute on function public.get_email_by_phone(text) to anon, authenticated;
 
+-- ============================================================================
+-- Fix HTTP 520 / 431: Remove oversized Base64 avatars from user metadata
+-- Base64 images in user_metadata bloat the JWT token to ~80KB, causing Cloudflare 520 errors
+-- ============================================================================
+update auth.users
+   set raw_user_meta_data = raw_user_meta_data - 'avatarUrl' - 'avatar_url'
+ where (raw_user_meta_data->>'avatarUrl') like 'data:%'
+    or (raw_user_meta_data->>'avatar_url') like 'data:%';
