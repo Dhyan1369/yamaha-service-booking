@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, Phone, CreditCard, Bike, Mail, Lock, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import Modal from './Modal';
 import Button from './Button';
@@ -7,16 +8,36 @@ import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../../context/LanguageContext';
 import { validateEmail, validatePhone, validateNIC, validatePassword } from '../../lib/validation';
 
-export default function AuthModal({ isOpen, onClose }) {
+const YAMAHA_MODELS = [
+  'Yamaha FZ-S V3',
+  'Yamaha MT-15 V2',
+  'Yamaha R15 V4',
+  'Yamaha FZ-X',
+  'Yamaha RayZR 125 Hybrid',
+  'Yamaha Aerox 155',
+  'Yamaha WR 155R',
+  'Other Yamaha Model'
+];
+
+export default function AuthModal({ isOpen, onClose, initialMode = 'signin', redirectTo = null }) {
   const { loginWithPhonePassword, signUpWithPhonePassword, resetPassword } = useAuth();
   const { lang, t } = useLanguage();
+  const navigate = useNavigate();
+
+  const resolveMode = (m) => (m === 'signup' || m === 'forgot' ? m : 'signin');
 
   // mode: 'signin' | 'signup' | 'forgot'
-  const [mode, setMode] = useState('signin');
+  const [mode, setMode] = useState(() => resolveMode(initialMode));
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+
+  useEffect(() => {
+    if (isOpen) {
+      setMode(resolveMode(initialMode));
+    }
+  }, [isOpen, initialMode]);
 
   const [form, setForm] = useState({
     loginInput: '',   // phone OR email for sign-in
@@ -93,6 +114,9 @@ export default function AuthModal({ isOpen, onClose }) {
       if (mode === 'signin') {
         await loginWithPhonePassword(form.loginInput.trim(), form.password);
         handleModalClose();
+        if (redirectTo) {
+          navigate(redirectTo);
+        }
       } else if (mode === 'signup') {
         await signUpWithPhonePassword(form.phone.trim(), form.password, {
           name: form.name.trim(),
@@ -120,9 +144,16 @@ export default function AuthModal({ isOpen, onClose }) {
     }
   };
 
+  const handleRegistrationDone = () => {
+    handleModalClose();
+    if (redirectTo) {
+      navigate(redirectTo);
+    }
+  };
+
   if (successMsg === 'registered') {
     return (
-      <Modal isOpen={isOpen} onClose={handleModalClose} title={t('auth.regSuccessTitle')} subtitle={t('auth.regSuccessSubtitle')}>
+      <Modal isOpen={isOpen} onClose={handleRegistrationDone} title={t('auth.regSuccessTitle')} subtitle={t('auth.regSuccessSubtitle')}>
         <div className="py-6 text-center space-y-4">
           <div className="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-2xl flex items-center justify-center mx-auto text-green-400">
             <CheckCircle className="w-9 h-9" />
@@ -132,7 +163,7 @@ export default function AuthModal({ isOpen, onClose }) {
             <p className="text-sm text-green-400 font-medium">{t('auth.regSuccessSubtitle')}</p>
             <p className="text-xs text-slate-400 mt-2">{t('auth.welcomeCustomer')}, {form.name || t('common.customer')}!</p>
           </div>
-          <Button type="button" variant="primary" className="w-full" onClick={handleModalClose}>
+          <Button type="button" variant="primary" className="w-full" onClick={handleRegistrationDone}>
             {t('auth.continueBtn')}
           </Button>
         </div>
@@ -166,15 +197,16 @@ export default function AuthModal({ isOpen, onClose }) {
     <Modal
       isOpen={isOpen}
       onClose={handleModalClose}
+      maxWidth={mode === 'signup' ? 'max-w-2xl' : 'max-w-md'}
       title={
-        mode === 'signin' ? t('auth.signInTitle') :
         mode === 'signup' ? t('auth.signUpTitle') :
-        t('auth.forgotTitle')
+        mode === 'forgot' ? t('auth.forgotTitle') :
+        t('auth.signInTitle')
       }
       subtitle={
-        mode === 'signin' ? t('auth.signInSubtitle') :
         mode === 'signup' ? t('auth.signUpSubtitle') :
-        t('auth.forgotSubtitle')
+        mode === 'forgot' ? t('auth.forgotSubtitle') :
+        t('auth.signInSubtitle')
       }
     >
       <div className="space-y-4">
@@ -265,7 +297,7 @@ export default function AuthModal({ isOpen, onClose }) {
           )}
 
           {mode === 'signup' && (
-            <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <Input
                 label={t('auth.fullNameLabel')}
                 icon={User}
@@ -278,11 +310,12 @@ export default function AuthModal({ isOpen, onClose }) {
                   if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: '' });
                 }}
               />
+
               <Input
                 label={t('auth.phoneLabel')}
                 icon={Phone}
                 type="tel"
-                placeholder="e.g. 0771234567"
+                placeholder="0771234567"
                 required
                 maxLength={10}
                 value={form.phone}
@@ -293,6 +326,42 @@ export default function AuthModal({ isOpen, onClose }) {
                   if (fieldErrors.phone) setFieldErrors({ ...fieldErrors, phone: '' });
                 }}
               />
+
+              <Input
+                label={t('auth.nicLabel')}
+                icon={CreditCard}
+                placeholder="951234567V / 199512345678"
+                required
+                maxLength={12}
+                value={form.nic}
+                error={fieldErrors.nic}
+                helperText={t('auth.nicHelper')}
+                onChange={(e) => {
+                  setForm({ ...form, nic: e.target.value.toUpperCase() });
+                  if (fieldErrors.nic) setFieldErrors({ ...fieldErrors, nic: '' });
+                }}
+              />
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                  {t('auth.bikeModelLabel')} <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Bike className="w-4 h-4" />
+                  </div>
+                  <select
+                    value={form.bikeModel}
+                    onChange={(e) => setForm({ ...form, bikeModel: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3.5 py-2.5 text-white text-sm outline-none transition focus:border-blue-500"
+                  >
+                    {YAMAHA_MODELS.map((model) => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <Input
                 label={t('auth.passwordLabel')}
                 icon={Lock}
@@ -307,11 +376,12 @@ export default function AuthModal({ isOpen, onClose }) {
                   if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: '' });
                 }}
               />
+
               <Input
                 label={t('auth.emailLabel')}
                 icon={Mail}
                 type="email"
-                placeholder="e.g. kamal@gmail.com"
+                placeholder="name@email.com (optional)"
                 value={form.email}
                 error={fieldErrors.email}
                 helperText={t('auth.emailHelper')}
@@ -320,29 +390,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: '' });
                 }}
               />
-              <Input
-                label={t('auth.nicLabel')}
-                icon={CreditCard}
-                placeholder="e.g. 951234567V or 199512345678"
-                required
-                maxLength={12}
-                value={form.nic}
-                error={fieldErrors.nic}
-                helperText={t('auth.nicHelper')}
-                onChange={(e) => {
-                  setForm({ ...form, nic: e.target.value.toUpperCase() });
-                  if (fieldErrors.nic) setFieldErrors({ ...fieldErrors, nic: '' });
-                }}
-              />
-              <Input
-                label={t('auth.bikeModelLabel')}
-                icon={Bike}
-                placeholder="e.g. Yamaha FZ-S V3"
-                required
-                value={form.bikeModel}
-                onChange={(e) => setForm({ ...form, bikeModel: e.target.value })}
-              />
-            </>
+            </div>
           )}
 
           {mode === 'forgot' && (

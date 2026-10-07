@@ -131,7 +131,7 @@ export default function Header({ onOpenSidebar }) {
             <Button
               size="sm"
               variant="primary"
-              onClick={openAuthModal}
+              onClick={() => openAuthModal('signin')}
               className="hidden sm:inline-flex"
             >
               {t('nav.login')}

@@ -112,7 +112,7 @@ export default function Sidebar({ isOpen, onClose }) {
                 icon={LogIn}
                 onClick={() => {
                   onClose();
-                  openAuthModal();
+                  openAuthModal('signin');
                 }}
               >
                 {t('nav.login')}

@@ -42,6 +42,8 @@ export function AuthProvider({ children }) {
 
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState('signin');
+  const [authRedirectPath, setAuthRedirectPath] = useState(null);
 
   // Convert a phone number to a virtual Supabase-compatible email (always using 0XXXXXXXXX format, no +94)
   const phoneToAuthEmail = (phone) => {
@@ -447,8 +449,18 @@ export function AuthProvider({ children }) {
     setSession(null);
   };
 
-  const openAuthModal  = () => setShowAuthModal(true);
-  const closeAuthModal = () => setShowAuthModal(false);
+  const openAuthModal = (mode = 'signin', redirectTo = null) => {
+    const validMode = (typeof mode === 'string' && (mode === 'signup' || mode === 'forgot')) ? mode : 'signin';
+    const validRedirect = typeof redirectTo === 'string' ? redirectTo : null;
+    setAuthModalMode(validMode);
+    setAuthRedirectPath(validRedirect);
+    setShowAuthModal(true);
+  };
+
+  const closeAuthModal = () => {
+    setShowAuthModal(false);
+    setAuthRedirectPath(null);
+  };
 
   return (
     <AuthContext.Provider
@@ -465,6 +477,8 @@ export function AuthProvider({ children }) {
         updateCustomerProfile,
         logout,
         showAuthModal,
+        authModalMode,
+        authRedirectPath,
         openAuthModal,
         closeAuthModal
       }}
