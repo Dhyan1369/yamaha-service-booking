@@ -104,7 +104,10 @@ export const bookingService = {
     }
 
     const { data, error } = await query;
-    if (error) throw new Error('Failed to load bookings. Please try again.');
+    if (error) {
+      console.error('[bookingService.getBookings] Supabase error:', error);
+      throw new Error(`Failed to load bookings: ${error.message} (${error.code || ''})`);
+    }
     return (data || []).map(mapBookingFromDb);
   },
 
@@ -130,7 +133,10 @@ export const bookingService = {
       };
     }
     const { data, error } = await supabase.rpc('get_booking_availability', { p_date: date });
-    if (error) throw new Error('Failed to load slot availability. Please try again.');
+    if (error) {
+      console.error('[bookingService.getAvailability] Supabase error:', error);
+      throw new Error(`Failed to load slot availability: ${error.message} (${error.code || ''})`);
+    }
     return data;
   },
 
@@ -256,18 +262,39 @@ export const bookingService = {
     throw new Error('Booking could not be created. Please try again.');
   },
 
-  async updateBookingStatus(id, newStatus) {
+  async updateBookingStatus(id, newStatus, scheduledDate = null) {
     if (!['Pending', 'In-Service', 'Completed', 'Cancelled'].includes(newStatus)) {
       throw new Error('Invalid booking status.');
     }
+
+    const todayKey = toDateKey(new Date());
 
     if (!isSupabaseConfigured || !supabase) {
       const localBookings = JSON.parse(localStorage.getItem('yamaha_local_bookings') || '[]');
       const target = localBookings.find((b) => b.id === id);
       if (!target) throw new Error('Booking not found.');
+      if ((newStatus === 'In-Service' || newStatus === 'Completed') && target.date > todayKey) {
+        throw new Error('Cannot change status to In-Service or Completed before the scheduled service date.');
+      }
       target.status = newStatus;
       localStorage.setItem('yamaha_local_bookings', JSON.stringify(localBookings));
       return target;
+    }
+
+    // Guard: Prevent advancing to In-Service or Completed before the service date arrives
+    if (newStatus === 'In-Service' || newStatus === 'Completed') {
+      let dateToCheck = scheduledDate;
+      if (!dateToCheck) {
+        const { data: currentBooking } = await supabase
+          .from('bookings')
+          .select('date')
+          .eq('id', id)
+          .single();
+        dateToCheck = currentBooking?.date;
+      }
+      if (dateToCheck && dateToCheck > todayKey) {
+        throw new Error('Cannot change status to In-Service or Completed before the scheduled service date.');
+      }
     }
 
     const { data, error } = await supabase
@@ -276,8 +303,29 @@ export const bookingService = {
       .eq('id', id)
       .select()
       .single();
-    if (error) throw new Error('Failed to update booking status.');
+    if (error) {
+      console.error('[bookingService.updateBookingStatus] error:', error);
+      throw new Error(`Failed to update booking status: ${error.message} (${error.code || ''})`);
+    }
     return mapBookingFromDb(data);
+  },
+
+  async cancelBooking(id) {
+    if (!isSupabaseConfigured || !supabase) {
+      return this.updateBookingStatus(id, 'Cancelled');
+    }
+
+    // Try RPC cancel_booking first (handles both user & admin ownership checks)
+    try {
+      const { data, error } = await supabase.rpc('cancel_booking', { p_booking_id: id });
+      if (!error && data?.success) {
+        return { id, status: 'Cancelled' };
+      }
+    } catch {
+      // Fallback to direct update
+    }
+
+    return this.updateBookingStatus(id, 'Cancelled');
   }
 };
 

@@ -86,14 +86,37 @@ export function useBookings() {
     }
   }, []);
 
-  const updateStatus = async (id, newStatus) => {
+  const updateStatus = async (id, newStatus, scheduledDate = null) => {
     try {
-      await bookingService.updateBookingStatus(id, newStatus);
+      await bookingService.updateBookingStatus(id, newStatus, scheduledDate);
       setBookings((prev) =>
         prev.map((b) => (b.id === id ? { ...b, status: newStatus } : b))
       );
+      // If a booking is cancelled, refresh availability for that date so quota is immediately freed
+      const target = bookings.find((b) => b.id === id);
+      const targetDate = scheduledDate || target?.date;
+      if (targetDate) {
+        refreshAvailability(targetDate);
+      }
     } catch (err) {
       console.error('Failed to update booking status:', err);
+      throw err;
+    }
+  };
+
+  const cancelBooking = async (id) => {
+    try {
+      await bookingService.cancelBooking(id);
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, status: 'Cancelled' } : b))
+      );
+      // Immediately refresh slot availability for the cancelled date
+      const target = bookings.find((b) => b.id === id);
+      if (target?.date) {
+        refreshAvailability(target.date);
+      }
+    } catch (err) {
+      console.error('Failed to cancel booking:', err);
       throw err;
     }
   };
@@ -151,8 +174,9 @@ export function useBookings() {
     refreshAvailability,
     addBooking,
     updateStatus,
+    cancelBooking,
     getBookingsForDate,
     getUserBookings,
     getSlotStats
   };
-}
+};
