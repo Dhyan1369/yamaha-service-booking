@@ -58,21 +58,33 @@ const mapBookingFromDb = (row) => {
   } else if (rawPhone.startsWith('94') && rawPhone.length === 11) {
     rawPhone = '0' + rawPhone.slice(2);
   }
+
+  const profile = row.profiles || null;
+
   return {
     id: row.id,
     tokenNo: row.token_no ?? row.tokenNo,
     timeSlot: row.time_slot ?? row.timeSlot,
-    name: row.name,
-    phone: rawPhone,
-    nic: row.nic,
-    bikeModel: row.bike_model ?? row.bikeModel,
+    name: row.name || profile?.full_name || '',
+    phone: rawPhone || profile?.phone || '',
+    nic: row.nic || profile?.nic || '',
+    bikeModel: row.bike_model ?? row.bikeModel ?? profile?.default_bike_model ?? '',
     mileage: row.mileage || '',
-    vehicleNo: row.vehicle_no ?? row.vehicleNo,
+    vehicleNo: row.vehicle_no ?? row.vehicleNo ?? profile?.default_vehicle_plate ?? '',
     serviceType: row.service_type ?? row.serviceType,
     status: row.status,
     date: row.date,
     userId: row.user_id ?? row.userId,
-    createdAt: row.created_at ?? row.createdAt
+    createdAt: row.created_at ?? row.createdAt,
+    profile: profile
+      ? {
+          fullName: profile.full_name,
+          phone: profile.phone,
+          nic: profile.nic,
+          defaultBikeModel: profile.default_bike_model,
+          defaultVehiclePlate: profile.default_vehicle_plate
+        }
+      : null
   };
 };
 
@@ -93,7 +105,10 @@ export const bookingService = {
       return result;
     }
 
-    let query = supabase.from('bookings').select('*');
+    let query = supabase
+      .from('bookings')
+      .select('*, profiles(full_name, phone, nic, default_bike_model, default_vehicle_plate)');
+
     if (dateFilter) query = query.eq('date', dateFilter);
     if (isAdmin) {
       query = query.order('token_no', { ascending: true });
@@ -103,7 +118,22 @@ export const bookingService = {
       return [];
     }
 
-    const { data, error } = await query;
+    let { data, error } = await query;
+
+    // Graceful fallback if public.profiles or FK constraint has not yet been applied
+    if (error && (error.code === 'PGRST200' || error.message?.includes('relationship') || error.message?.includes('profiles'))) {
+      let fallbackQuery = supabase.from('bookings').select('*');
+      if (dateFilter) fallbackQuery = fallbackQuery.eq('date', dateFilter);
+      if (isAdmin) {
+        fallbackQuery = fallbackQuery.order('token_no', { ascending: true });
+      } else if (userId) {
+        fallbackQuery = fallbackQuery.eq('user_id', userId).order('date', { ascending: false });
+      }
+      const fallbackRes = await fallbackQuery;
+      data = fallbackRes.data;
+      error = fallbackRes.error;
+    }
+
     if (error) {
       console.error('[bookingService.getBookings] Supabase error:', error);
       throw new Error(`Failed to load bookings: ${error.message} (${error.code || ''})`);
@@ -224,7 +254,7 @@ export const bookingService = {
       cleanPhone = '0' + cleanPhone.slice(2);
     }
 
-    const { data: rpcData, error: rpcError } = await supabase.rpc('create_booking_transaction', {
+    const rpcParams = {
       p_date: bookingData.date,
       p_name: bookingData.name,
       p_phone: cleanPhone,
@@ -232,8 +262,20 @@ export const bookingService = {
       p_bike_model: bookingData.bikeModel,
       p_vehicle_no: bookingData.vehicleNo,
       p_service_type: bookingData.serviceType,
-      p_user_id: bookingData.userId
-    });
+      p_user_id: bookingData.userId,
+      p_mileage: bookingData.mileage ? String(bookingData.mileage).trim() : null
+    };
+
+    let { data: rpcData, error: rpcError } = await supabase.rpc('create_booking_transaction', rpcParams);
+
+    // Fallback if database RPC has not yet been updated with p_mileage parameter
+    if (rpcError && (rpcError.message?.includes('Could not find') || rpcError.code === 'PGRST202')) {
+      const fallbackParams = { ...rpcParams };
+      delete fallbackParams.p_mileage;
+      const fallbackRes = await supabase.rpc('create_booking_transaction', fallbackParams);
+      rpcData = fallbackRes.data;
+      rpcError = fallbackRes.error;
+    }
 
     if (!rpcError && rpcData) return mapBookingFromDb(Array.isArray(rpcData) ? rpcData[0] : rpcData);
     if (rpcError?.message?.includes('SLOT_FULL')) {

@@ -8,6 +8,7 @@ import SlotSelector from './SlotSelector';
 import TokenReceipt from './TokenReceipt';
 import { useAuth } from '../../hooks/useAuth';
 import { useBookings } from '../../hooks/useBookings';
+import { useVehicles } from '../../hooks/useVehicles';
 import { useLanguage } from '../../context/LanguageContext';
 import { POYA_DATES, HOLIDAY_DATES, getNextOpenBookingDate } from '../../services/bookingService';
 import { validateBookingData } from '../../lib/validation';
@@ -17,13 +18,16 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
   const navigate = useNavigate();
   const { user, openAuthModal } = useAuth();
   const { addBooking, getSlotStats, refreshAvailability, refreshBookings } = useBookings();
-  const { lang, t } = useLanguage();
+  const { vehicles, addVehicle: addGarageVehicle } = useVehicles();
+  const { t } = useLanguage();
 
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [bikeModel, setBikeModel] = useState(user?.bikeModel || 'Yamaha FZ-S V3');
+  const [bikeModel, setBikeModel] = useState(user?.bikeModel || user?.defaultBikeModel || 'Yamaha FZ-S V3');
   const [mileage, setMileage] = useState('');
-  const [vehicleNo, setVehicleNo] = useState('');
+  const [vehicleNo, setVehicleNo] = useState(user?.vehiclePlate || user?.defaultVehiclePlate || '');
+  const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [saveToGarage, setSaveToGarage] = useState(true);
   const [serviceType, setServiceType] = useState('Free Service');
   const [date, setDate] = useState(() => {
     return location.state?.selectedDate || getNextOpenBookingDate();
@@ -33,6 +37,32 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
   const [showReceipt, setShowReceipt] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Auto-select default vehicle from garage if available
+  useEffect(() => {
+    if (vehicles.length > 0) {
+      const defaultVeh = vehicles.find((v) => v.isDefault) || vehicles[0];
+      if (defaultVeh && (!selectedVehicleId || selectedVehicleId === '')) {
+        setSelectedVehicleId(defaultVeh.id);
+        setBikeModel(defaultVeh.bikeModel);
+        setVehicleNo(defaultVeh.vehiclePlate);
+      }
+    }
+  }, [vehicles, selectedVehicleId]);
+
+  const handleSelectVehicle = (vehId) => {
+    setSelectedVehicleId(vehId);
+    if (vehId === '__new__') {
+      setBikeModel('Yamaha FZ-S V3');
+      setVehicleNo('');
+    } else {
+      const found = vehicles.find((v) => v.id === vehId);
+      if (found) {
+        setBikeModel(found.bikeModel);
+        setVehicleNo(found.vehiclePlate);
+      }
+    }
+  };
 
   // Resolved values if user signs in later
   const customerName = name || user?.name || '';
@@ -117,13 +147,27 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
 
     try {
       setSubmitting(true);
+
+      // If user registered a new bike and selected "Save to My Garage", persist it
+      if (user?.id && (selectedVehicleId === '__new__' || vehicles.length === 0) && saveToGarage && vehicleNo.trim()) {
+        try {
+          await addGarageVehicle({
+            bikeModel: selectedBikeModel,
+            vehiclePlate: vehicleNo.trim().toUpperCase(),
+            isDefault: vehicles.length === 0
+          });
+        } catch (vehErr) {
+          console.warn('[BookingForm] Could not auto-save vehicle to garage:', vehErr.message);
+        }
+      }
+
       const newBooking = {
         name: customerName,
         phone: customerPhone,
         nic: user.nic || 'N/A',
         bikeModel: selectedBikeModel,
         mileage: mileage ? String(mileage).trim() : '',
-        vehicleNo,
+        vehicleNo: vehicleNo.trim().toUpperCase(),
         serviceType,
         date,
         userId: user.id || null
@@ -212,6 +256,12 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
           onMileageChange={(val) => setMileage(val)}
           vehicleNo={vehicleNo}
           onVehicleNoChange={(val) => setVehicleNo(val)}
+          savedVehicles={vehicles}
+          selectedVehicleId={selectedVehicleId}
+          onSelectVehicle={handleSelectVehicle}
+          saveToGarage={saveToGarage}
+          onSaveToGarageChange={setSaveToGarage}
+          isLoggedIn={Boolean(user)}
         />
 
         {/* Service Type Selection */}
