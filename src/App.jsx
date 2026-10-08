@@ -24,7 +24,7 @@ function ProtectedAdminRoute({ children }) {
     );
   }
 
-  if (!user || !user.isAdmin) {
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
     // If not logged in or not admin, redirect to home page
     return (
       <div className="max-w-md mx-auto my-20 p-6 bg-slate-900 border border-slate-800 rounded-2xl text-center space-y-4">

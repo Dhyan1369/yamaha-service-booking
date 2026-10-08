@@ -51,18 +51,18 @@ export default function Home() {
       <section className="relative overflow-hidden pt-12 pb-20 border-b border-slate-900 bg-gradient-to-b from-blue-950/25 via-slate-950 to-slate-950">
         <div className="max-w-5xl mx-auto px-4 text-center">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 text-xs font-semibold mb-6">
-            <Sparkles className="w-3.5 h-3.5" /> Quick Booking & Real-Time Token Generation
+            <Sparkles className="w-3.5 h-3.5" /> {t('home.badge')}
           </div>
 
           <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-            Fast & Precision Care For Your{' '}
+            {t('home.heroTitlePrefix')}{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-blue-500 to-red-500">
-              Yamaha Beast
+              {t('home.heroTitleHighlight')}
             </span>
           </h1>
 
           <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            දිනකට උපරිම ටෝකන් 12ක් පමණි (Free Service 5 | Full + Normal Service 7). ඔබේ වෙන්කරගැනීම දැන්ම සිදුකර වේලාව ඉතිරි කරගන්න.
+            {t('home.heroSubtitle')}
           </p>
 
           {/* Booking Action Buttons */}
@@ -72,7 +72,7 @@ export default function Home() {
               className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-lg rounded-2xl shadow-xl shadow-blue-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-3"
             >
               <Wrench className="w-5 h-5" />
-              {user?.isAdmin ? 'Manage Admin Dashboard' : 'Book a Service Now'}
+              {user?.isAdmin ? t('home.manageAdminDashboard') : t('home.bookServiceNow')}
               <ChevronRight className="w-5 h-5" />
             </button>
 
@@ -86,7 +86,7 @@ export default function Home() {
               }`}
             >
               <Calendar className="w-5 h-5 text-white" />
-              {showSlots ? 'Hide Available Slots' : 'View Available Slots'}
+              {showSlots ? t('home.hideAvailableSlots') : t('home.viewAvailableSlots')}
             </button>
           </div>
 
@@ -126,54 +126,54 @@ export default function Home() {
                   {/* Total Slots */}
                   <div className="bg-slate-950/80 border border-slate-800 p-3.5 rounded-xl">
                     <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                      {lang === 'si' ? 'මුළු වාර (Total)' : 'Total Slots'}
+                      {t('home.totalSlotsLabel')}
                     </p>
                     <div className="flex items-baseline justify-between mt-1.5">
                       <p className="text-xl font-extrabold text-white">
                         {slotStats.availableSlots} <span className="text-xs font-normal text-slate-500">/ {slotStats.maxDailySlots}</span>
                       </p>
                       <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${slotStats.isDayFull ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
-                        {slotStats.isDayFull ? (lang === 'si' ? 'පිරී ඇත' : 'FULL') : (lang === 'si' ? `${slotStats.availableSlots}ක් ඇත` : `${slotStats.availableSlots} Left`)}
+                        {slotStats.isDayFull ? t('home.quotaFull') : `${slotStats.availableSlots} ${t('home.slotsLeft')}`}
                       </span>
                     </div>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      {slotStats.totalBooked} booked so far
+                      {slotStats.totalBooked} {t('home.bookedSoFar')}
                     </p>
                   </div>
 
                   {/* Free Service Quota */}
                   <div className="bg-slate-950/80 border border-slate-800 p-3.5 rounded-xl">
                     <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                      {lang === 'si' ? 'Free Service (නොමිලේ)' : 'Free Service'}
+                      {t('home.freeServiceLabel')}
                     </p>
                     <div className="flex items-baseline justify-between mt-1.5">
                       <p className="text-xl font-extrabold text-blue-400">
                         {slotStats.availableFreeSlots} <span className="text-xs font-normal text-slate-500">/ {slotStats.maxFreeServices}</span>
                       </p>
                       <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${slotStats.isFreeServiceFull ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                        {slotStats.isFreeServiceFull ? (lang === 'si' ? 'පිරී ඇත' : 'FULL') : (lang === 'si' ? `${slotStats.availableFreeSlots}ක් ඇත` : `${slotStats.availableFreeSlots} Left`)}
+                        {slotStats.isFreeServiceFull ? t('home.quotaFull') : `${slotStats.availableFreeSlots} ${t('home.slotsLeft')}`}
                       </span>
                     </div>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Max 5 per day quota
+                      {t('home.max5Quota')}
                     </p>
                   </div>
 
                   {/* Full + Normal Service Quota */}
                   <div className="bg-slate-950/80 border border-slate-800 p-3.5 rounded-xl">
                     <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                      {lang === 'si' ? 'Full & Normal Service' : 'Full & Normal'}
+                      {t('home.standardServiceLabel')}
                     </p>
                     <div className="flex items-baseline justify-between mt-1.5">
                       <p className="text-xl font-extrabold text-purple-400">
                         {slotStats.availableStandardSlots} <span className="text-xs font-normal text-slate-500">/ {slotStats.maxStandardServices}</span>
                       </p>
                       <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${slotStats.isStandardServiceFull ? 'bg-red-500/20 text-red-400' : 'bg-purple-500/20 text-purple-400'}`}>
-                        {slotStats.isStandardServiceFull ? (lang === 'si' ? 'පිරී ඇත' : 'FULL') : (lang === 'si' ? `${slotStats.availableStandardSlots}ක් ඇත` : `${slotStats.availableStandardSlots} Left`)}
+                        {slotStats.isStandardServiceFull ? t('home.quotaFull') : `${slotStats.availableStandardSlots} ${t('home.slotsLeft')}`}
                       </span>
                     </div>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Max 7 per day quota
+                      {t('home.max7Quota')}
                     </p>
                   </div>
                 </div>
@@ -183,9 +183,7 @@ export default function Home() {
                   <div className="text-xs text-slate-400 flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                     <span>
-                      {lang === 'si'
-                        ? `ඊළඟ ටෝකනය: #${String(slotStats.nextAvailableToken).padStart(2, '0')} (${slotStats.nextSlotTime})`
-                        : `Next Estimated Token: #${String(slotStats.nextAvailableToken).padStart(2, '0')} (${slotStats.nextSlotTime})`}
+                      {t('home.nextEstimatedToken')} #{String(slotStats.nextAvailableToken).padStart(2, '0')} ({slotStats.nextSlotTime})
                     </span>
                   </div>
 
@@ -222,10 +220,10 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-12">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-            Why Choose Manju Yamaha Service, Kamburupitiya?
+            {t('home.whyChooseTitle')}
           </h2>
           <p className="text-slate-400 text-sm mt-2">
-            Specially trained technicians with certified diagnostic tools and genuine parts.
+            {t('home.whyChooseSubtitle')}
           </p>
         </div>
 
@@ -234,9 +232,9 @@ export default function Home() {
             <div className="w-12 h-12 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 mb-4">
               <Zap className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">Real-Time Token Queue</h3>
+            <h3 className="text-lg font-bold text-white mb-2">{t('home.feature1Title')}</h3>
             <p className="text-slate-400 text-xs leading-relaxed">
-              No long queues or waiting lines. Book your exact 45-minute service window online with our daily token system.
+              {t('home.feature1Desc')}
             </p>
           </div>
 
@@ -244,9 +242,9 @@ export default function Home() {
             <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-center text-red-400 mb-4">
               <Award className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">100% Genuine Yamalube</h3>
+            <h3 className="text-lg font-bold text-white mb-2">{t('home.feature2Title')}</h3>
             <p className="text-slate-400 text-xs leading-relaxed">
-              We exclusively use factory-spec lubricants, genuine filters, and diagnostic firmware updates for peak performance.
+              {t('home.feature2Desc')}
             </p>
           </div>
 
@@ -254,9 +252,9 @@ export default function Home() {
             <div className="w-12 h-12 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center justify-center text-green-400 mb-4">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">Warranty Guaranteed</h3>
+            <h3 className="text-lg font-bold text-white mb-2">{t('home.feature3Title')}</h3>
             <p className="text-slate-400 text-xs leading-relaxed">
-              All services recorded officially with warranty retention. Full Free Service quotas managed automatically.
+              {t('home.feature3Desc')}
             </p>
           </div>
         </div>

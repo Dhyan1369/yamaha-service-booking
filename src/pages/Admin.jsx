@@ -102,9 +102,9 @@ export default function Admin() {
     setWalkInSubmitting(true);
 
     // Guard: only authenticated admins may use this path.
-    // The isAdmin flag is derived from server-controlled app_metadata;
-    // we never pass it in the booking payload.
-    if (!user?.isAdmin) {
+    // Privileges are validated against server app_metadata or canonical profiles role.
+    const isUserAdmin = Boolean(user?.isAdmin || user?.role === 'admin');
+    if (!isUserAdmin) {
       setWalkInError('Access denied: admin session required.');
       setWalkInSubmitting(false);
       return;
@@ -487,6 +487,9 @@ export default function Admin() {
                       <td className="px-6 py-4">
                         <p className="font-semibold text-white leading-tight">{item.name}</p>
                         <p className="text-xs text-slate-400 font-mono mt-0.5">{item.phone}</p>
+                        {item.profile?.nic && item.profile.nic !== 'N/A' && (
+                          <span className="text-[10px] text-slate-500 font-mono block mt-0.5">NIC: {item.profile.nic}</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-slate-200">
                         <div>{item.bikeModel}</div>

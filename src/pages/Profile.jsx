@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   User,
   Phone,
@@ -19,13 +19,15 @@ import {
   X,
   Camera,
   Loader2,
-  Upload,
-  Trash2
+  Trash2,
+  Plus,
+  Star
 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { useAuth } from '../hooks/useAuth';
 import { useBookings } from '../hooks/useBookings';
+import { useVehicles } from '../hooks/useVehicles';
 import { useLanguage } from '../context/LanguageContext';
 import { validatePhone, validateNIC, validateEmail } from '../lib/validation';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
@@ -113,8 +115,8 @@ function InfoRow({ icon: Icon, label, value, mono = false, required = false }) {
 export default function Profile() {
   const { user, updateCustomerProfile, openAuthModal } = useAuth();
   const { getUserBookings } = useBookings();
+  const { vehicles, addVehicle, deleteVehicle, setDefaultVehicle } = useVehicles();
   const { t } = useLanguage();
-  const navigate = useNavigate();
 
   // ── Edit toggle ──────────────────────────────────────────────────────────
   const [isEditing, setIsEditing] = useState(false);
@@ -124,13 +126,72 @@ export default function Profile() {
   const [phone, setPhone] = useState(user?.phone || '');
   const [nic, setNic] = useState(user?.nic || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [bikeModel, setBikeModel] = useState(user?.bikeModel || 'Yamaha FZ-S V3');
+  const [bikeModel, setBikeModel] = useState(user?.bikeModel || user?.defaultBikeModel || 'Yamaha FZ-S V3');
+  const [vehiclePlate, setVehiclePlate] = useState(user?.vehiclePlate || user?.defaultVehiclePlate || '');
   const [newPassword, setNewPassword] = useState('');
+
+  // ── My Garage state ──────────────────────────────────────────────────────
+  const [showAddBikeModal, setShowAddBikeModal] = useState(false);
+  const [newBikeModel, setNewBikeModel] = useState('Yamaha FZ-S V3');
+  const [newVehiclePlate, setNewVehiclePlate] = useState('');
+  const [makeDefaultNew, setMakeDefaultNew] = useState(false);
+  const [addingBike, setAddingBike] = useState(false);
+  const [bikeModalError, setBikeModalError] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  const handleAddNewBike = async (e) => {
+    e.preventDefault();
+    setBikeModalError('');
+    const cleanPlate = newVehiclePlate.trim().toUpperCase();
+    if (!cleanPlate) {
+      setBikeModalError('Please enter a vehicle plate number.');
+      return;
+    }
+    try {
+      setAddingBike(true);
+      await addVehicle({
+        bikeModel: newBikeModel,
+        vehiclePlate: cleanPlate,
+        isDefault: vehicles.length === 0 || makeDefaultNew
+      });
+      setNewVehiclePlate('');
+      setMakeDefaultNew(false);
+      setShowAddBikeModal(false);
+      setSuccessMessage(t('profile.bikeAddedSuccess'));
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err) {
+      setBikeModalError(err.message || 'Failed to add bike to garage.');
+    } finally {
+      setAddingBike(false);
+    }
+  };
+
+  const handleSetDefault = async (vehId) => {
+    try {
+      await setDefaultVehicle(vehId);
+      setSuccessMessage(t('profile.bikeDefaultUpdated'));
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to update default vehicle.');
+      setTimeout(() => setErrorMessage(''), 4000);
+    }
+  };
+
+  const handleDeleteBike = async (vehId) => {
+    if (!window.confirm(t('profile.confirmRemoveBike'))) return;
+    try {
+      await deleteVehicle(vehId);
+      setSuccessMessage(t('profile.bikeRemovedSuccess'));
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to remove vehicle.');
+      setTimeout(() => setErrorMessage(''), 4000);
+    }
+  };
 
   // ── Not logged in guard ──────────────────────────────────────────────────
   if (!user) {
@@ -159,7 +220,8 @@ export default function Profile() {
     setPhone(user.phone || '');
     setNic(user.nic || '');
     setEmail(user.email || '');
-    setBikeModel(user.bikeModel || 'Yamaha FZ-S V3');
+    setBikeModel(user.bikeModel || user.defaultBikeModel || 'Yamaha FZ-S V3');
+    setVehiclePlate(user.vehiclePlate || user.defaultVehiclePlate || '');
     setNewPassword('');
     setErrorMessage('');
     setSuccessMessage('');
@@ -315,9 +377,12 @@ export default function Profile() {
         phone: phone.trim().replace(/[\s-]/g, ''),
         nic: nic.trim().toUpperCase(),
         email: email.trim(),
+        vehiclePlate: vehiclePlate.trim().toUpperCase(),
+        default_vehicle_plate: vehiclePlate.trim().toUpperCase(),
       };
       if (!user.isAdmin) {
         profileUpdates.bikeModel = bikeModel.trim();
+        profileUpdates.default_bike_model = bikeModel.trim();
       }
       if (newPassword) {
         profileUpdates.password = newPassword;
@@ -573,17 +638,99 @@ export default function Profile() {
               <InfoRow icon={Mail}       label={t('profile.emailLabel')}     value={user.email} />
             </div>
 
-            {/* Motorcycle Info (customers only) */}
+            {/* Motorcycle Info & My Garage (customers only) */}
             {!user.isAdmin && (
-              <>
-                <p className="text-xs uppercase font-bold tracking-wider text-blue-400 mb-2 flex items-center gap-1.5">
-                  <Bike className="w-4 h-4" />
-                  <span>{t('profile.motorcycleInfo')}</span>
-                </p>
-                <div className="bg-slate-950/50 border border-slate-800 rounded-2xl px-4 mb-5">
-                  <InfoRow icon={Bike} label={t('profile.defaultModelLabel')} value={user.bikeModel} />
+              <div className="pt-2 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs uppercase font-bold tracking-wider text-blue-400 flex items-center gap-1.5">
+                    <Bike className="w-4 h-4" />
+                    <span>{t('profile.myGarage', 'My Garage')}</span>
+                    <span className="ml-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-semibold border border-blue-500/20">
+                      {vehicles.length}
+                    </span>
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBikeModalError('');
+                      setShowAddBikeModal(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-semibold transition hover:scale-105"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{t('profile.addBike', 'Add Bike')}</span>
+                  </button>
                 </div>
-              </>
+
+                {vehicles.length === 0 ? (
+                  <div className="p-6 bg-slate-950/50 border border-dashed border-slate-800 rounded-2xl text-center space-y-3">
+                    <Bike className="w-8 h-8 text-slate-600 mx-auto" />
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                      {t('profile.noVehiclesInGarage')}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddBikeModal(true)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-lg shadow-blue-600/20"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{t('profile.addBike', 'Add Bike')}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {vehicles.map((v) => (
+                      <div
+                        key={v.id}
+                        className={`relative p-4 rounded-2xl border transition ${
+                          v.isDefault
+                            ? 'bg-blue-950/20 border-blue-500/40 shadow-lg shadow-blue-500/5'
+                            : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-sm font-bold text-white truncate">{v.bikeModel}</h4>
+                              {v.isDefault && (
+                                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold border border-blue-500/30 shrink-0">
+                                  {t('profile.defaultBadge', 'Default')}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs font-mono font-bold text-slate-300 tracking-wider mt-1.5">
+                              {v.vehiclePlate}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            {!v.isDefault && (
+                              <button
+                                type="button"
+                                onClick={() => handleSetDefault(v.id)}
+                                title={t('profile.setAsDefault', 'Set as Default')}
+                                className="px-2 py-1 rounded-lg text-slate-400 hover:text-blue-300 hover:bg-blue-500/10 transition text-[11px] flex items-center gap-1 font-semibold border border-transparent hover:border-blue-500/20"
+                              >
+                                <Star className="w-3.5 h-3.5" />
+                                <span>{t('profile.setAsDefault', 'Default')}</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBike(v.id)}
+                              title={t('profile.removeBike', 'Remove')}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Admin notice */}
@@ -745,6 +892,15 @@ export default function Profile() {
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1">{t('profile.defaultModelHelper')}</p>
                   </div>
+
+                  <Input
+                    label={t('common.vehiclePlate', 'Default Vehicle Plate')}
+                    icon={CreditCard}
+                    value={vehiclePlate}
+                    onChange={(e) => setVehiclePlate(e.target.value.toUpperCase())}
+                    placeholder="e.g. WP BCD-1234"
+                    helperText={t('profile.defaultPlateHelper', 'Pre-fills your vehicle plate during service booking')}
+                  />
                 </div>
               </div>
             )}
@@ -796,6 +952,93 @@ export default function Profile() {
           </form>
         )}
       </div>
+
+      {/* ── Add Motorcycle Modal ────────────────────────────────────────── */}
+      {showAddBikeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Bike className="w-4 h-4 text-blue-400" />
+                  <span>{t('profile.addNewBikeModalTitle', 'Add Motorcycle to Garage')}</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {t('profile.addNewBikeModalSubtitle', 'Enter bike model and registration plate number.')}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddBikeModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {bikeModalError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{bikeModalError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddNewBike} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                  {t('booking.bikeModelLabel')} <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={newBikeModel}
+                  onChange={(e) => setNewBikeModel(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white text-sm outline-none transition focus:border-blue-500"
+                >
+                  {YAMAHA_MODELS.map((model) => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
+              </div>
+
+              <Input
+                label={t('booking.plateLabel')}
+                placeholder="e.g. WP BAP-4521"
+                required
+                value={newVehiclePlate}
+                onChange={(e) => setNewVehiclePlate(e.target.value.toUpperCase())}
+                helperText="Sri Lankan vehicle registration number"
+              />
+
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={makeDefaultNew}
+                  onChange={(e) => setMakeDefaultNew(e.target.checked)}
+                  className="w-4 h-4 rounded text-blue-600 bg-slate-950 border-slate-800"
+                />
+                <span>{t('profile.setAsDefault', 'Set as Default')}</span>
+              </label>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddBikeModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingBike}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-lg shadow-blue-600/30 flex items-center gap-2"
+                >
+                  {addingBike && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{t('profile.addBike', 'Add Bike')}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
