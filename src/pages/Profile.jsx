@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   User,
   Phone,
@@ -21,7 +21,8 @@ import {
   Loader2,
   Trash2,
   Plus,
-  Star
+  Star,
+  ChevronDown
 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
@@ -96,16 +97,16 @@ function InfoRow({ icon: Icon, label, value, mono = false, required = false }) {
   // Always show required fields; hide truly empty optional ones
   if (!value && !required) return null;
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-slate-800/60 last:border-0">
-      <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0 mt-0.5">
-        <Icon className="w-4 h-4 text-blue-400" />
+    <div className="flex items-start gap-3 py-3 border-b border-border last:border-0">
+      <div className="w-8 h-8 rounded-lg bg-surfaceMuted border border-border/50 flex items-center justify-center shrink-0 mt-0.5">
+        <Icon className="w-4 h-4 text-brandBlue" />
       </div>
       <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-0.5">{label}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-mutedText mb-0.5">{label}</p>
         {value ? (
-          <p className={`text-sm font-semibold text-white break-words ${mono ? 'font-mono' : ''}`}>{value}</p>
+          <p className={`text-sm font-semibold text-mainText break-words ${mono ? 'font-mono' : ''}`}>{value}</p>
         ) : (
-          <p className="text-sm text-slate-600 italic">Not set — click Edit Profile to add</p>
+          <p className="text-sm text-mutedText italic">Not set — click Edit Profile to add</p>
         )}
       </div>
     </div>
@@ -113,7 +114,8 @@ function InfoRow({ icon: Icon, label, value, mono = false, required = false }) {
 }
 
 export default function Profile() {
-  const { user, updateCustomerProfile, openAuthModal } = useAuth();
+  const navigate = useNavigate();
+  const { user, updateCustomerProfile } = useAuth();
   const { getUserBookings } = useBookings();
   const { vehicles, addVehicle, deleteVehicle, setDefaultVehicle } = useVehicles();
   const { t } = useLanguage();
@@ -197,12 +199,12 @@ export default function Profile() {
   if (!user) {
     return (
       <div className="max-w-md mx-auto px-4 py-20 text-center">
-        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-blue-400">
+        <div className="w-16 h-16 bg-brandBlue/10 border border-brandBlue/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-brandBlue">
           <User className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-2">{t('profile.loginRequired')}</h2>
-        <p className="text-xs text-slate-400 mb-6">{t('profile.loginRequiredDesc')}</p>
-        <Button variant="primary" size="md" onClick={() => openAuthModal('signin')}>
+        <h2 className="text-2xl font-bold text-mainText mb-2">{t('profile.loginRequired')}</h2>
+        <p className="text-xs text-mutedText mb-6">{t('profile.loginRequiredDesc')}</p>
+        <Button variant="primary" size="md" onClick={() => navigate('/login', { state: { redirectTo: '/profile' } })}>
           {t('profile.loginBtn')}
         </Button>
       </div>
@@ -412,7 +414,7 @@ export default function Profile() {
       <div className="flex items-center justify-between">
         <Link
           to={user.isAdmin ? '/admin' : '/dashboard'}
-          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-mutedText hover:text-mainText transition"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>{user.isAdmin ? t('profile.backToAdmin') : t('profile.backToDashboard')}</span>
@@ -422,7 +424,7 @@ export default function Profile() {
           {!user.isAdmin && (
             <Link
               to="/booking"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 text-xs font-semibold transition"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brandBlue/10 hover:bg-brandBlue/20 text-brandBlue border border-brandBlue/20 text-xs font-semibold transition"
             >
               <Wrench className="w-3.5 h-3.5" />
               <span>{t('nav.bookService')}</span>
@@ -433,26 +435,26 @@ export default function Profile() {
 
       {/* Global success/error alerts (shown outside edit form too) */}
       {successMessage && (
-        <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-2xl text-green-400 text-xs sm:text-sm flex items-center gap-3 animate-fade-in">
-          <CheckCircle2 className="w-5 h-5 shrink-0 text-green-400" />
+        <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-2xl text-green-600 dark:text-green-400 text-xs sm:text-sm flex items-center gap-3 animate-fade-in shadow-sm">
+          <CheckCircle2 className="w-5 h-5 shrink-0 text-green-500" />
           <span className="font-medium">{successMessage}</span>
         </div>
       )}
 
       {/* Header Profile Summary Card */}
       <div
-        className={`relative overflow-hidden border rounded-3xl p-6 sm:p-8 shadow-xl ${
+        className={`relative overflow-hidden border rounded-3xl p-6 sm:p-8 shadow-md ${
           user.isAdmin
-            ? 'bg-gradient-to-r from-amber-950/30 via-slate-900 to-slate-900 border-amber-900/50'
-            : 'bg-gradient-to-r from-blue-900/30 via-slate-900 to-slate-900 border-slate-800'
+            ? 'bg-gradient-to-r from-amber-500/10 via-surface to-surface border-amber-500/30'
+            : 'bg-gradient-to-r from-brandBlue/10 via-surface to-surface border-border'
         }`}
       >
         {/* Background Watermark Icon */}
-        <div className="absolute top-0 right-0 p-8 pointer-events-none opacity-10">
+        <div className="absolute top-0 right-0 p-8 pointer-events-none opacity-5">
           {user.isAdmin ? (
             <Shield className="w-48 h-48 text-amber-500" />
           ) : (
-            <Bike className="w-48 h-48 text-blue-500" />
+            <Bike className="w-48 h-48 text-brandBlue" />
           )}
         </div>
 
@@ -460,7 +462,7 @@ export default function Profile() {
           <div className="flex items-center gap-4 sm:gap-6">
             <div className="relative group shrink-0">
               <div
-                className={`w-16 h-16 sm:w-20 sm:h-20 text-white rounded-2xl flex items-center justify-center font-black text-2xl sm:text-3xl shadow-lg ring-4 ring-slate-800 overflow-hidden relative ${
+                className={`w-16 h-16 sm:w-20 sm:h-20 text-white rounded-2xl flex items-center justify-center font-black text-2xl sm:text-3xl shadow-lg ring-4 ring-border overflow-hidden relative ${
                   user.isAdmin
                     ? 'bg-gradient-to-br from-amber-500 to-amber-700 shadow-amber-600/30'
                     : 'bg-gradient-to-br from-blue-600 to-indigo-600 shadow-blue-600/30'
@@ -477,8 +479,8 @@ export default function Profile() {
                 )}
 
                 {isUploadingAvatar && (
-                  <div className="absolute inset-0 bg-slate-950/80 flex items-center justify-center">
-                    <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                  <div className="absolute inset-0 bg-surface/80 flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 text-brandBlue animate-spin" />
                   </div>
                 )}
               </div>
@@ -486,11 +488,11 @@ export default function Profile() {
               {isEditing && (
                 <label
                   htmlFor="avatar-upload-header"
-                  className="absolute inset-0 bg-slate-950/75 hover:bg-slate-950/90 cursor-pointer rounded-2xl flex flex-col items-center justify-center text-white transition-opacity duration-200 shadow-lg border border-blue-500/40"
+                  className="absolute inset-0 bg-black/70 hover:bg-black/80 cursor-pointer rounded-2xl flex flex-col items-center justify-center text-white transition-opacity duration-200 shadow-lg border border-brandBlue/40"
                   title="Upload profile photo"
                 >
-                  <Camera className="w-5 h-5 text-blue-400 group-hover:scale-110 transition-transform" />
-                  <span className="text-[9px] font-bold text-slate-200 mt-0.5 uppercase tracking-wider">Photo</span>
+                  <Camera className="w-5 h-5 text-brandBlue group-hover:scale-110 transition-transform" />
+                  <span className="text-[9px] font-bold text-white mt-0.5 uppercase tracking-wider">Photo</span>
                   <input
                     id="avatar-upload-header"
                     type="file"
@@ -504,29 +506,29 @@ export default function Profile() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-mainText tracking-tight">
                   {user.name}
                 </h1>
                 {user.isAdmin ? (
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 flex items-center gap-1">
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-500/30 flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5" /> {t('profile.workshopAdminBadge')}
                   </span>
                 ) : (
-                  <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-bold border border-blue-500/30 flex items-center gap-1">
+                  <span className="px-2.5 py-0.5 rounded-full bg-brandBlue/10 text-brandBlue text-[10px] font-bold border border-brandBlue/20 flex items-center gap-1">
                     <Sparkles className="w-3.5 h-3.5" /> {t('profile.customerBadge')}
                   </span>
                 )}
               </div>
-              <p className="text-xs sm:text-sm text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-                <span className="flex items-center gap-1 text-slate-300 font-mono">
-                  <Phone className="w-3.5 h-3.5 text-blue-400" />
+              <p className="text-xs sm:text-sm text-mutedText mt-1 flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1 text-mainText font-mono">
+                  <Phone className="w-3.5 h-3.5 text-brandBlue" />
                   {user.phone}
                 </span>
                 {user.email && (
                   <>
                     <span>•</span>
-                    <span className="flex items-center gap-1 text-slate-300">
-                      <Mail className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="flex items-center gap-1 text-subText">
+                      <Mail className="w-3.5 h-3.5 text-mutedText" />
                       {user.email}
                     </span>
                   </>
@@ -534,8 +536,8 @@ export default function Profile() {
                 {user.nic && (
                   <>
                     <span>•</span>
-                    <span className="flex items-center gap-1 text-slate-400 font-mono text-xs">
-                      <CreditCard className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="flex items-center gap-1 text-mutedText font-mono text-xs">
+                      <CreditCard className="w-3.5 h-3.5 text-mutedText" />
                       NIC: {user.nic}
                     </span>
                   </>
@@ -548,29 +550,29 @@ export default function Profile() {
           <div className="flex items-center gap-3 w-full sm:w-auto">
             {user.isAdmin ? (
               <>
-                <div className="flex-1 sm:flex-none bg-slate-950/70 border border-slate-800 rounded-2xl px-4 py-2.5 text-center">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{t('profile.accessLevel')}</p>
-                  <p className="text-sm font-bold text-amber-300">{t('profile.fullControl')}</p>
+                <div className="flex-1 sm:flex-none bg-surfaceMuted border border-border rounded-2xl px-4 py-2.5 text-center">
+                  <p className="text-[10px] text-mutedText font-semibold uppercase tracking-wider">{t('profile.accessLevel')}</p>
+                  <p className="text-sm font-bold text-amber-600 dark:text-amber-400">{t('profile.fullControl')}</p>
                 </div>
-                <div className="flex-1 sm:flex-none bg-slate-950/70 border border-slate-800 rounded-2xl px-4 py-2.5 text-center">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{t('profile.staffRole')}</p>
-                  <p className="text-sm font-bold text-white">{t('profile.workshopManager')}</p>
+                <div className="flex-1 sm:flex-none bg-surfaceMuted border border-border rounded-2xl px-4 py-2.5 text-center">
+                  <p className="text-[10px] text-mutedText font-semibold uppercase tracking-wider">{t('profile.staffRole')}</p>
+                  <p className="text-sm font-bold text-mainText">{t('profile.workshopManager')}</p>
                 </div>
               </>
             ) : (
               <>
-                <div className="flex-1 sm:flex-none bg-slate-950/70 border border-slate-800 rounded-2xl px-4 py-2.5 text-center">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{t('profile.totalBookings')}</p>
-                  <p className="text-lg font-bold text-white">{userBookings.length}</p>
+                <div className="flex-1 sm:flex-none bg-surfaceMuted border border-border rounded-2xl px-4 py-2.5 text-center">
+                  <p className="text-[10px] text-mutedText font-semibold uppercase tracking-wider">{t('profile.totalBookings')}</p>
+                  <p className="text-lg font-bold text-mainText">{userBookings.length}</p>
                 </div>
-                <div className="flex-1 sm:flex-none bg-slate-950/70 border border-slate-800 rounded-2xl px-4 py-2.5 text-center">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{t('profile.activeTokens')}</p>
-                  <p className="text-lg font-bold text-blue-400">{activeBookings.length}</p>
+                <div className="flex-1 sm:flex-none bg-surfaceMuted border border-border rounded-2xl px-4 py-2.5 text-center">
+                  <p className="text-[10px] text-mutedText font-semibold uppercase tracking-wider">{t('profile.activeTokens')}</p>
+                  <p className="text-lg font-bold text-brandBlue">{activeBookings.length}</p>
                 </div>
                 {bikeModel && (
-                  <div className="hidden md:block bg-slate-950/70 border border-slate-800 rounded-2xl px-4 py-2.5 text-center">
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{t('profile.registeredBike')}</p>
-                    <p className="text-xs font-bold text-slate-200 mt-1 truncate max-w-[130px]">{bikeModel}</p>
+                  <div className="hidden md:block bg-surfaceMuted border border-border rounded-2xl px-4 py-2.5 text-center">
+                    <p className="text-[10px] text-mutedText font-semibold uppercase tracking-wider">{t('profile.registeredBike')}</p>
+                    <p className="text-xs font-bold text-mainText mt-1 truncate max-w-[130px]">{bikeModel}</p>
                   </div>
                 )}
               </>
@@ -580,19 +582,19 @@ export default function Profile() {
       </div>
 
       {/* ── Profile Details / Edit Form Card ─────────────────────────────── */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl">
+      <div className="bg-surface border border-border rounded-3xl p-6 sm:p-8 shadow-md">
 
         {/* Card Header with Edit / Cancel toggle */}
-        <div className="border-b border-slate-800 pb-5 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="border-b border-border pb-5 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <h2 className="text-lg font-bold text-mainText flex items-center gap-2">
               {isEditing ? (
-                <><Edit3 className="w-5 h-5 text-blue-400" /><span>{t('profile.editTitle')}</span></>
+                <><Edit3 className="w-5 h-5 text-brandBlue" /><span>{t('profile.editTitle')}</span></>
               ) : (
-                <><User className="w-5 h-5 text-blue-400" /><span>{t('profile.detailsTitle', 'Profile Details')}</span></>
+                <><User className="w-5 h-5 text-brandBlue" /><span>{t('profile.detailsTitle', 'Profile Details')}</span></>
               )}
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-mutedText mt-0.5">
               {isEditing
                 ? (user.isAdmin ? t('profile.editSubtitleAdmin') : t('profile.editSubtitleCustomer'))
                 : t('profile.detailsSubtitle', 'Your saved information')}
@@ -604,7 +606,7 @@ export default function Profile() {
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold border border-slate-700 transition"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-300 dark:border-slate-600 transition"
               >
                 <X className="w-3.5 h-3.5" />
                 <span>{t('common.cancel')}</span>
@@ -613,9 +615,9 @@ export default function Profile() {
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-lg shadow-blue-600/30"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white text-xs font-bold transition shadow-sm hover:shadow"
               >
-                <Edit3 className="w-3.5 h-3.5" />
+                <Edit3 className="w-3.5 h-3.5 text-white" />
                 <span>{t('nav.editProfile')}</span>
               </button>
             )}
@@ -627,11 +629,11 @@ export default function Profile() {
         {!isEditing && (
           <div className="space-y-1">
             {/* Personal Info */}
-            <p className="text-xs uppercase font-bold tracking-wider text-blue-400 mb-2 flex items-center gap-1.5">
+            <p className="text-xs uppercase font-bold tracking-wider text-brandBlue mb-2 flex items-center gap-1.5">
               <User className="w-4 h-4" />
               <span>{t('profile.personalInfo')}</span>
             </p>
-            <div className="bg-slate-950/50 border border-slate-800 rounded-2xl px-4 divide-y divide-slate-800/60 mb-5">
+            <div className="bg-surfaceMuted/40 border border-border rounded-2xl px-4 divide-y divide-border mb-5">
               <InfoRow icon={User}       label={t('profile.fullNameLabel')}  value={user.name}  required />
               <InfoRow icon={Phone}      label={t('profile.phoneLabel')}     value={user.phone} required mono />
               <InfoRow icon={CreditCard} label={t('profile.nicLabel')}       value={user.nic}   mono />
@@ -642,10 +644,10 @@ export default function Profile() {
             {!user.isAdmin && (
               <div className="pt-2 mb-6">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs uppercase font-bold tracking-wider text-blue-400 flex items-center gap-1.5">
+                  <p className="text-xs uppercase font-bold tracking-wider text-brandBlue flex items-center gap-1.5">
                     <Bike className="w-4 h-4" />
                     <span>{t('profile.myGarage', 'My Garage')}</span>
-                    <span className="ml-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-semibold border border-blue-500/20">
+                    <span className="ml-1.5 px-2 py-0.5 rounded-full bg-brandBlue/10 text-brandBlue text-[10px] font-semibold border border-brandBlue/20">
                       {vehicles.length}
                     </span>
                   </p>
@@ -656,7 +658,7 @@ export default function Profile() {
                       setBikeModalError('');
                       setShowAddBikeModal(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-semibold transition hover:scale-105"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brandBlue/10 hover:bg-brandBlue/20 text-brandBlue border border-brandBlue/30 text-xs font-semibold transition hover:scale-105"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>{t('profile.addBike', 'Add Bike')}</span>
@@ -664,15 +666,15 @@ export default function Profile() {
                 </div>
 
                 {vehicles.length === 0 ? (
-                  <div className="p-6 bg-slate-950/50 border border-dashed border-slate-800 rounded-2xl text-center space-y-3">
-                    <Bike className="w-8 h-8 text-slate-600 mx-auto" />
-                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  <div className="p-6 bg-surfaceMuted/30 border border-dashed border-border rounded-2xl text-center space-y-3">
+                    <Bike className="w-8 h-8 text-mutedText/60 mx-auto" />
+                    <p className="text-xs text-mutedText max-w-sm mx-auto">
                       {t('profile.noVehiclesInGarage')}
                     </p>
                     <button
                       type="button"
                       onClick={() => setShowAddBikeModal(true)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-lg shadow-blue-600/20"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brandBlue hover:opacity-90 text-white text-xs font-bold transition shadow-md"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>{t('profile.addBike', 'Add Bike')}</span>
@@ -685,21 +687,21 @@ export default function Profile() {
                         key={v.id}
                         className={`relative p-4 rounded-2xl border transition ${
                           v.isDefault
-                            ? 'bg-blue-950/20 border-blue-500/40 shadow-lg shadow-blue-500/5'
-                            : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
+                            ? 'bg-brandBlue/10 border-brandBlue/40 shadow-sm'
+                            : 'bg-surfaceMuted/50 border-border hover:border-border/80'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="text-sm font-bold text-white truncate">{v.bikeModel}</h4>
+                              <h4 className="text-sm font-bold text-mainText truncate">{v.bikeModel}</h4>
                               {v.isDefault && (
-                                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold border border-blue-500/30 shrink-0">
+                                <span className="px-2 py-0.5 rounded-full bg-brandBlue/20 text-brandBlue text-[10px] font-bold border border-brandBlue/30 shrink-0">
                                   {t('profile.defaultBadge', 'Default')}
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs font-mono font-bold text-slate-300 tracking-wider mt-1.5">
+                            <p className="text-xs font-mono font-bold text-subText tracking-wider mt-1.5">
                               {v.vehiclePlate}
                             </p>
                           </div>
@@ -710,7 +712,7 @@ export default function Profile() {
                                 type="button"
                                 onClick={() => handleSetDefault(v.id)}
                                 title={t('profile.setAsDefault', 'Set as Default')}
-                                className="px-2 py-1 rounded-lg text-slate-400 hover:text-blue-300 hover:bg-blue-500/10 transition text-[11px] flex items-center gap-1 font-semibold border border-transparent hover:border-blue-500/20"
+                                className="px-2 py-1 rounded-lg text-mutedText hover:text-brandBlue hover:bg-brandBlue/10 transition text-[11px] flex items-center gap-1 font-semibold border border-transparent hover:border-brandBlue/20"
                               >
                                 <Star className="w-3.5 h-3.5" />
                                 <span>{t('profile.setAsDefault', 'Default')}</span>
@@ -720,7 +722,7 @@ export default function Profile() {
                               type="button"
                               onClick={() => handleDeleteBike(v.id)}
                               title={t('profile.removeBike', 'Remove')}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition"
+                              className="p-1.5 rounded-lg text-mutedText hover:text-red-500 hover:bg-red-500/10 transition"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -735,11 +737,11 @@ export default function Profile() {
 
             {/* Admin notice */}
             {user.isAdmin && (
-              <div className="p-4 bg-amber-950/20 border border-amber-800/40 rounded-2xl text-xs text-amber-200/90 flex items-start gap-3">
-                <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-800 dark:text-amber-200 flex items-start gap-3">
+                <ShieldCheck className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
-                  <p className="font-bold text-amber-300">{t('profile.adminNoticeTitle')}</p>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">{t('profile.adminNoticeDesc')}</p>
+                  <p className="font-bold text-amber-600 dark:text-amber-300">{t('profile.adminNoticeTitle')}</p>
+                  <p className="text-[11px] text-mutedText leading-relaxed">{t('profile.adminNoticeDesc')}</p>
                 </div>
               </div>
             )}
@@ -751,37 +753,37 @@ export default function Profile() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Alerts inside the form */}
             {errorMessage && (
-              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-xs sm:text-sm flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-600 dark:text-red-400 text-xs sm:text-sm flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 shrink-0 text-red-500" />
                 <span className="font-medium">{errorMessage}</span>
               </div>
             )}
 
             {/* Profile Photo Upload Section */}
-            <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-2xl flex flex-col sm:flex-row items-center gap-4">
+            <div className="p-4 bg-surfaceMuted/50 border border-border rounded-2xl flex flex-col sm:flex-row items-center gap-4">
               <div className="relative group shrink-0">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden flex items-center justify-center font-black text-2xl text-white shadow-md relative">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-surface border-2 border-border overflow-hidden flex items-center justify-center font-black text-2xl text-mainText shadow-md relative">
                   {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                   ) : (
                     (user.name || 'U').charAt(0).toUpperCase()
                   )}
                   {isUploadingAvatar && (
-                    <div className="absolute inset-0 bg-slate-950/80 flex items-center justify-center">
-                      <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                    <div className="absolute inset-0 bg-surface/80 flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 text-brandBlue animate-spin" />
                     </div>
                   )}
                 </div>
               </div>
               <div className="flex-1 text-center sm:text-left">
-                <h4 className="text-sm font-bold text-white mb-0.5">Profile Photo</h4>
-                <p className="text-xs text-slate-400 mb-3">
+                <h4 className="text-sm font-bold text-mainText mb-0.5">Profile Photo</h4>
+                <p className="text-xs text-mutedText mb-3">
                   Upload a clear photo (JPEG, PNG, WebP). Compressed automatically to fit free limits.
                 </p>
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                   <label
                     htmlFor="avatar-upload-btn"
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold cursor-pointer transition shadow-md"
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-brandBlue hover:opacity-90 text-white text-xs font-semibold cursor-pointer transition shadow-md"
                   >
                     <Camera className="w-4 h-4" />
                     <span>{isUploadingAvatar ? 'Uploading...' : 'Choose / Change Photo'}</span>
@@ -800,7 +802,7 @@ export default function Profile() {
                       type="button"
                       onClick={handleRemoveAvatar}
                       disabled={isUploadingAvatar}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 hover:border-red-500/50 text-xs font-semibold transition"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 text-xs font-semibold transition"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Remove Photo</span>
@@ -858,39 +860,39 @@ export default function Profile() {
 
             {/* Section 2: Motorcycle Info */}
             {user.isAdmin ? (
-              <div className="p-4 bg-amber-950/20 border border-amber-800/40 rounded-2xl text-xs text-amber-200/90 flex items-start gap-3">
-                <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-800 dark:text-amber-200 flex items-start gap-3">
+                <ShieldCheck className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
-                  <p className="font-bold text-amber-300">{t('profile.adminNoticeTitle')}</p>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">{t('profile.adminNoticeDesc')}</p>
+                  <p className="font-bold text-amber-600 dark:text-amber-300">{t('profile.adminNoticeTitle')}</p>
+                  <p className="text-[11px] text-mutedText leading-relaxed">{t('profile.adminNoticeDesc')}</p>
                 </div>
               </div>
             ) : (
-              <div className="pt-4 border-t border-slate-800">
-                <p className="text-xs uppercase font-bold tracking-wider text-blue-400 mb-3 flex items-center gap-1.5">
+              <div className="pt-4 border-t border-border">
+                <p className="text-xs uppercase font-bold tracking-wider text-brandBlue mb-3 flex items-center gap-1.5">
                   <Bike className="w-4 h-4" />
                   <span>{t('profile.motorcycleInfo')}</span>
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-                      {t('profile.defaultModelLabel')} <span className="text-red-400">*</span>
+                    <label className="block text-xs font-semibold text-subText mb-1.5">
+                      {t('profile.defaultModelLabel')} <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-mutedText">
                         <Bike className="w-4 h-4" />
                       </div>
                       <select
                         value={bikeModel}
                         onChange={(e) => setBikeModel(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3.5 py-2.5 text-white text-sm outline-none transition focus:border-blue-500"
+                        className="w-full bg-surfaceMuted border border-border rounded-xl pl-10 pr-3.5 py-2.5 text-mainText text-sm outline-none transition focus:border-brandBlue"
                       >
                         {YAMAHA_MODELS.map((model) => (
                           <option key={model} value={model}>{model}</option>
                         ))}
                       </select>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-1">{t('profile.defaultModelHelper')}</p>
+                    <p className="text-[11px] text-mutedText mt-1">{t('profile.defaultModelHelper')}</p>
                   </div>
 
                   <Input
@@ -906,12 +908,12 @@ export default function Profile() {
             )}
 
             {/* Section 3: Security / Password */}
-            <div className="pt-4 border-t border-slate-800">
-              <p className="text-xs uppercase font-bold tracking-wider text-blue-400 mb-1 flex items-center gap-1.5">
+            <div className="pt-4 border-t border-border">
+              <p className="text-xs uppercase font-bold tracking-wider text-brandBlue mb-1 flex items-center gap-1.5">
                 <Lock className="w-4 h-4" />
                 <span>{user.isAdmin ? t('profile.securityInfoAdmin') : t('profile.securityInfoCustomer')}</span>
               </p>
-              <p className="text-xs text-slate-500 mb-3">{t('profile.passwordSubtitle')}</p>
+              <p className="text-xs text-mutedText mb-3">{t('profile.passwordSubtitle')}</p>
               <div className="max-w-md">
                 <Input
                   label={t('profile.newPasswordLabel')}
@@ -927,8 +929,8 @@ export default function Profile() {
             </div>
 
             {/* Action Buttons */}
-            <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p className="text-xs text-slate-500">{t('profile.savePrompt')}</p>
+            <div className="pt-6 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-xs text-mutedText">{t('profile.savePrompt')}</p>
               <div className="flex items-center gap-3 w-full sm:w-auto">
                 <Button
                   type="button"
@@ -943,7 +945,7 @@ export default function Profile() {
                   variant="primary"
                   loading={saving}
                   icon={Save}
-                  className="flex-1 sm:flex-none shadow-lg shadow-blue-600/30"
+                  className="flex-1 sm:flex-none shadow-md"
                 >
                   {saving ? t('common.saving') : t('common.save')}
                 </Button>
@@ -955,48 +957,64 @@ export default function Profile() {
 
       {/* ── Add Motorcycle Modal ────────────────────────────────────────── */}
       {showAddBikeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-xs">
+          <div 
+            className="fixed inset-0"
+            onClick={() => setShowAddBikeModal(false)}
+            aria-hidden="true"
+          />
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-7 max-w-md w-full shadow-2xl space-y-4 relative z-10 text-slate-900 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-3.5 border-b border-slate-200 dark:border-slate-800">
               <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Bike className="w-4 h-4 text-blue-400" />
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Bike className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   <span>{t('profile.addNewBikeModalTitle', 'Add Motorcycle to Garage')}</span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {t('profile.addNewBikeModalSubtitle', 'Enter bike model and registration plate number.')}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowAddBikeModal(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                aria-label="Close modal"
+                className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {bikeModalError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
                 <span>{bikeModalError}</span>
               </div>
             )}
 
             <form onSubmit={handleAddNewBike} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-                  {t('booking.bikeModelLabel')} <span className="text-red-400">*</span>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {t('booking.bikeModelLabel')} <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={newBikeModel}
-                  onChange={(e) => setNewBikeModel(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white text-sm outline-none transition focus:border-blue-500"
-                >
-                  {YAMAHA_MODELS.map((model) => (
-                    <option key={model} value={model}>{model}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 dark:text-slate-400">
+                    <Bike className="w-4 h-4" />
+                  </div>
+                  <select
+                    value={newBikeModel}
+                    onChange={(e) => setNewBikeModel(e.target.value)}
+                    className="w-full min-h-[44px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-9 py-2.5 text-slate-900 dark:text-slate-100 text-sm outline-none transition focus:border-blue-600 focus:ring-1 focus:ring-blue-600/30 appearance-none cursor-pointer"
+                  >
+                    {YAMAHA_MODELS.map((model) => (
+                      <option key={model} value={model} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                        {model}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                    <ChevronDown className="w-4 h-4" />
+                  </div>
+                </div>
               </div>
 
               <Input
@@ -1006,32 +1024,35 @@ export default function Profile() {
                 value={newVehiclePlate}
                 onChange={(e) => setNewVehiclePlate(e.target.value.toUpperCase())}
                 helperText="Sri Lankan vehicle registration number"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck="false"
               />
 
-              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer pt-1">
+              <label className="min-h-[44px] flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer pt-1">
                 <input
                   type="checkbox"
                   checked={makeDefaultNew}
                   onChange={(e) => setMakeDefaultNew(e.target.checked)}
-                  className="w-4 h-4 rounded text-blue-600 bg-slate-950 border-slate-800"
+                  className="w-4 h-4 rounded text-blue-600 bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600 focus:ring-blue-500"
                 />
-                <span>{t('profile.setAsDefault', 'Set as Default')}</span>
+                <span className="font-medium">{t('profile.setAsDefault', 'Set as Default Motorcycle')}</span>
               </label>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center sm:justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowAddBikeModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition flex items-center justify-center"
                 >
                   {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={addingBike}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-lg shadow-blue-600/30 flex items-center gap-2"
+                  className="min-h-[44px] px-5 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {addingBike && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {addingBike && <Loader2 className="w-4 h-4 animate-spin" />}
                   <span>{t('profile.addBike', 'Add Bike')}</span>
                 </button>
               </div>
