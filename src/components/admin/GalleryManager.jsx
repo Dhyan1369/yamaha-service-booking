@@ -273,11 +273,20 @@ export default function GalleryManager() {
 
       {/* Add Photo Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-surface border border-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <h3 className="text-base font-bold text-mainText flex items-center gap-2">
-                <Upload className="w-4 h-4 text-brandPrimary" />
+        <div className="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div 
+            className="fixed inset-0"
+            onClick={() => {
+              setShowAddModal(false);
+              setSelectedFile(null);
+              setFilePreview('');
+            }}
+            aria-hidden="true"
+          />
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 relative z-10 text-slate-900 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Upload className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span>Upload New Workshop Photo</span>
               </h3>
               <button
