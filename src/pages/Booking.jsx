@@ -1,9 +1,83 @@
-import { ShieldCheck, AlertTriangle, CalendarCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ShieldCheck, AlertTriangle, CalendarCheck, Shield, ArrowRight } from 'lucide-react';
 import BookingForm from '../components/booking/BookingForm';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../hooks/useAuth';
+import Button from '../components/common/Button';
 
 export default function Booking() {
-  const { t } = useLanguage();
+  const { lang, t } = useLanguage();
+  const { profile, user } = useAuth();
+  const navigate = useNavigate();
+
+  const isAdmin = Boolean(profile?.role === 'admin' || user?.isAdmin || user?.role === 'admin');
+
+  // If user is Admin, guide them to use the Walk-In Booking workflow inside Admin Portal
+  if (isAdmin) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 sm:py-24 animate-fadeIn">
+        <div
+          className="p-8 sm:p-10 rounded-3xl text-center space-y-6 shadow-2xl relative overflow-hidden"
+          style={{
+            background: 'linear-gradient(150deg, #0d1629 0%, #070b16 100%)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(37, 99, 235, 0.15)',
+          }}
+        >
+          {/* Top accent line */}
+          <div
+            className="absolute top-0 left-0 right-0 h-1"
+            style={{ background: 'linear-gradient(90deg, #3b82f6, #ef4444, #3b82f6)' }}
+          />
+
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto"
+            style={{
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+            }}
+          >
+            <Shield className="w-8 h-8 text-amber-400" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+              {t('booking.staffNoticeBadge', 'STAFF PORTAL NOTICE')}
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
+              {t('booking.staffNoticeHeadline', 'Staff Portal Notice: Direct Booking Restricted')}
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto leading-relaxed pt-1">
+              {t(
+                'booking.staffNoticeBody',
+                'You are logged in with administrator privileges. To issue a service token for a walk-in rider or phone-in customer, please use the Walk-In Token Manager in your Admin Dashboard.'
+              )}
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => navigate('/admin?action=walkin', { state: { openWalkIn: true } })}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 min-h-[48px] px-6 text-sm font-bold shadow-lg"
+            >
+              <span>{t('booking.openWalkInManagerBtn', 'Open Walk-In Token Manager')}</span>
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => navigate('/')}
+              className="w-full sm:w-auto min-h-[48px] px-6 text-sm"
+            >
+              {t('booking.returnHomeBtn', 'Return to Home')}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-3.5 sm:px-6 lg:px-8 py-6 sm:py-10">

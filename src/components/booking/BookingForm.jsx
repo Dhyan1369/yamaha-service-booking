@@ -16,7 +16,7 @@ import { validateBookingData } from '../../lib/validation';
 export default function BookingForm({ onBookingSuccess, onCancel }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, openAuthModal } = useAuth();
+  const { user } = useAuth();
   const { addBooking, getSlotStats, refreshAvailability, refreshBookings } = useBookings();
   const { vehicles, addVehicle: addGarageVehicle } = useVehicles();
   const { t } = useLanguage();
@@ -81,7 +81,14 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
     setErrorMessage('');
 
     if (!user) {
-      openAuthModal('signin');
+      navigate('/login', { state: { redirectTo: '/booking' } });
+      return;
+    }
+
+    if (user && (user.isActive === false || user.is_active === false)) {
+      setErrorMessage(
+        t('booking.errAccountDeactivated', 'Your account has been deactivated. Please contact the workshop to restore booking access.')
+      );
       return;
     }
 
@@ -123,7 +130,8 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
       phone: customerPhone,
       bikeModel: selectedBikeModel,
       vehicleNo,
-      serviceType
+      serviceType,
+      mileage
     });
     if (!validation.valid) {
       setErrorMessage(Object.values(validation.errors)[0]);
@@ -266,29 +274,33 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
 
         {/* Service Type Selection */}
         <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-            {t('booking.selectServiceType')} <span className="text-red-400">*</span>
+          <label className="block text-xs font-semibold text-subText mb-1.5">
+            {t('booking.selectServiceType')} <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-mutedText">
               <Wrench className="w-4 h-4" />
             </div>
             <select
               value={serviceType}
               onChange={(e) => setServiceType(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3.5 py-2.5 text-white text-sm outline-none transition focus:border-blue-500"
+              className="w-full rounded-xl pl-10 pr-3.5 py-2.5 text-white text-sm outline-none transition focus:border-blue-500"
+              style={{
+                background: '#0a1020',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
             >
-              <option value="Free Service" disabled={stats.isFreeServiceFull}>
+              <option value="Free Service" disabled={stats.isFreeServiceFull} className="bg-slate-900 text-white">
                 {stats.isFreeServiceFull 
                   ? t('booking.freeServiceFull') 
                   : `${t('booking.freeService')} (${stats.availableFreeSlots} / ${stats.maxFreeServices} ${t('booking.freeServiceSlotsLeft')})`}
               </option>
-              <option value="Full Service" disabled={stats.isStandardServiceFull}>
+              <option value="Full Service" disabled={stats.isStandardServiceFull} className="bg-slate-900 text-white">
                 {stats.isStandardServiceFull
                   ? `${t('booking.fullService')} (${t('booking.standardQuotaFull')})`
                   : `${t('booking.fullService')} (${stats.availableStandardSlots} / ${stats.maxStandardServices} ${t('booking.freeServiceSlotsLeft')})`}
               </option>
-              <option value="Normal Service" disabled={stats.isStandardServiceFull}>
+              <option value="Normal Service" disabled={stats.isStandardServiceFull} className="bg-slate-900 text-white">
                 {stats.isStandardServiceFull
                   ? `${t('booking.normalService')} (${t('booking.standardQuotaFull')})`
                   : `${t('booking.normalService')} (${stats.availableStandardSlots} / ${stats.maxStandardServices} ${t('booking.freeServiceSlotsLeft')})`}
@@ -298,7 +310,13 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
         </div>
 
         {/* Advance Booking Policy Notice */}
-        <div className="p-3 bg-blue-950/40 border border-blue-800/50 rounded-xl text-xs text-blue-300 flex items-start gap-2.5">
+        <div
+          className="p-3.5 rounded-xl text-xs flex items-start gap-2.5"
+          style={{
+            background: 'rgba(37, 99, 235, 0.08)',
+            border: '1px solid rgba(37, 99, 235, 0.25)',
+          }}
+        >
           <Clock className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
           <div className="space-y-0.5">
             <p className="font-semibold text-white">{t('booking.advanceNoticeTitle')}</p>
@@ -308,18 +326,25 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
           </div>
         </div>
 
-        {/* Date / Slot Selector */}
+        {/* Date / Slot Selector - inline={true} expands within layout so it doesn't cover content */}
         <SlotSelector
           selectedDate={date}
           onDateChange={(selected) => setDate(selected)}
           label={t('booking.selectDate')}
+          inline={true}
         />
 
         {/* Live Slot Status for selected date */}
-        <div className="p-3.5 bg-slate-950/70 border border-slate-800/80 rounded-xl text-xs space-y-2">
+        <div
+          className="p-3.5 rounded-xl text-xs space-y-2"
+          style={{
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.07)',
+          }}
+        >
           <div className="flex justify-between items-center text-slate-300">
             <span>{t('booking.dateAvailability')}</span>
-            <span className={`font-bold ${stats.isDayFull ? 'text-red-400' : 'text-green-400'}`}>
+            <span className={`font-bold ${stats.isDayFull ? 'text-red-400' : 'text-emerald-400'}`}>
               {stats.isDayFull ? t('booking.full') : `${stats.availableSlots} / ${stats.maxDailySlots} ${t('booking.slotsAvailable')}`}
             </span>
           </div>
@@ -336,9 +361,15 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
             </span>
           </div>
           {!stats.isDayFull && (
-            <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-900">
+            <p
+              className="text-[11px] pt-1"
+              style={{
+                borderTop: '1px solid rgba(255, 255, 255, 0.07)',
+                color: 'var(--text-muted)',
+              }}
+            >
               {t('booking.estimatedToken')}{' '}
-              <span className="font-mono text-white font-bold">
+              <span className="font-mono text-blue-400 font-bold">
                 #{String(stats.nextAvailableToken).padStart(2, '0')}
               </span>{' '}
               ({stats.nextSlotTime})
@@ -347,12 +378,12 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
         </div>
 
         {/* Buttons */}
-        <div className="flex gap-3 pt-3">
+        <div className={`pt-3 ${onCancel ? 'flex flex-col-reverse sm:flex-row gap-3' : ''}`}>
           {onCancel && (
             <Button
               type="button"
               variant="outline"
-              className="flex-1"
+              className="w-full sm:w-auto py-3 sm:py-2.5 px-4 rounded-xl text-sm font-semibold"
               onClick={onCancel}
             >
               {t('common.cancel')}
@@ -362,7 +393,7 @@ export default function BookingForm({ onBookingSuccess, onCancel }) {
             type="submit"
             variant="primary"
             disabled={stats.isDayFull || submitting}
-            className="flex-1"
+            className="w-full py-3.5 text-base font-semibold rounded-xl flex-1 shadow-lg shadow-blue-600/25"
           >
             {submitting ? t('booking.bookingInProgress') : stats.isDayFull ? t('booking.dateFull') : t('booking.confirmBooking')}
           </Button>
