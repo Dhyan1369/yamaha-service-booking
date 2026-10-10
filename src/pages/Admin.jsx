@@ -1,15 +1,23 @@
-import { useEffect, useState } from 'react';
-import { ShieldCheck, Search, Calendar, PlusCircle, Wrench, User, Phone, Bike, CreditCard, CheckCircle2, Clock, AlertTriangle, Gauge } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
+import { ShieldCheck, Search, Calendar, PlusCircle, Wrench, User, Users, Phone, Bike, CreditCard, CheckCircle2, Clock, AlertTriangle, Gauge, Image as ImageIcon, MessageSquare, ExternalLink } from 'lucide-react';
 import { useBookings } from '../hooks/useBookings';
 import { useAuth } from '../hooks/useAuth';
+import { useLanguage } from '../context/LanguageContext';
 import Input from '../components/common/Input';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
-import { HOLIDAY_DATES, POYA_DATES } from '../services/bookingService';
+import GalleryManager from '../components/admin/GalleryManager';
+import InquiryManager from '../components/admin/InquiryManager';
+import CustomerDirectory from '../components/admin/CustomerDirectory';
+import { HOLIDAY_DATES, POYA_DATES, bookingService } from '../services/bookingService';
+import { inquiryService } from '../services/inquiryService';
 import { validateBookingData } from '../lib/validation';
+import { YAMAHA_MODELS } from '../components/booking/BikeDetails';
 
 export default function Admin() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const {
     bookings,
     updateStatus,
@@ -29,7 +37,18 @@ export default function Admin() {
     return `${year}-${month}-${day}`;
   });
 
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
   const [dateViewMode, setDateViewMode] = useState('selected'); // 'selected' | 'all'
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'inquiries' || tabParam === 'messages') return 'inquiries';
+    if (tabParam === 'gallery') return 'gallery';
+    if (tabParam === 'customers') return 'customers';
+    return 'bookings';
+  });
+  const [newInquiryCount, setNewInquiryCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showWalkInModal, setShowWalkInModal] = useState(false);
@@ -37,15 +56,49 @@ export default function Admin() {
   const [walkInError, setWalkInError] = useState('');
   const [statusUpdateError, setStatusUpdateError] = useState('');
 
-  const [walkInForm, setWalkInForm] = useState({
-    name: '',
+  // Handle query parameter tab switching and walk-in action (/admin?tab=inquiries, /admin?tab=customers, /admin?action=walkin)
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'inquiries' || tabParam === 'messages') {
+      setActiveTab('inquiries');
+    } else if (tabParam === 'gallery') {
+      setActiveTab('gallery');
+    } else if (tabParam === 'customers') {
+      setActiveTab('customers');
+    }
+
+    if (location.state?.openWalkIn || searchParams.get('action') === 'walkin') {
+      setShowWalkInModal(true);
+      setActiveTab('bookings');
+      if (location.state?.openWalkIn) {
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state, searchParams]);
+
+  // Fetch initial new inquiries count for tab badge
+  useEffect(() => {
+    inquiryService.getInquiries().then((data) => {
+      const count = data.filter((i) => i.status === 'new').length;
+      setNewInquiryCount(count);
+    }).catch(() => {});
+  }, []);
+
+  const initialWalkInState = {
+    customerName: '',
     phone: '',
-    nic: 'Walk-in',
     bikeModel: 'Yamaha FZ-S V3',
     mileage: '',
     vehicleNo: '',
-    serviceType: 'Full Service'
-  });
+    serviceType: 'Full Service',
+    customerNotes: '',
+    userId: null
+  };
+
+  const [walkInForm, setWalkInForm] = useState(initialWalkInState);
+  const [matchedCustomer, setMatchedCustomer] = useState(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const lookupTimeoutRef = useRef(null);
 
   const stats = getSlotStats(selectedDate);
   const dayBookings = dateViewMode === 'all' ? bookings : stats.dayBookings;
@@ -57,6 +110,13 @@ export default function Admin() {
     refreshBookings();
     refreshAvailability(selectedDate);
   }, [selectedDate, refreshAvailability, refreshBookings]);
+
+  // Clean up any pending phone lookup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+    };
+  }, []);
 
   const filteredBookings = dayBookings.filter((b) => {
     const matchesSearch =
@@ -96,13 +156,62 @@ export default function Admin() {
     }
   };
 
+  const handlePhoneChange = (e) => {
+    const rawVal = e.target.value;
+    setWalkInForm((prev) => ({ ...prev, phone: rawVal }));
+
+    let cleanPhone = rawVal.trim().replace(/[\s-]/g, '');
+    if (cleanPhone.startsWith('+94')) {
+      cleanPhone = '0' + cleanPhone.slice(3);
+    } else if (cleanPhone.startsWith('94') && cleanPhone.length === 11) {
+      cleanPhone = '0' + cleanPhone.slice(2);
+    }
+
+    if (cleanPhone.length === 10 && cleanPhone.startsWith('0')) {
+      if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+      setLookupLoading(true);
+
+      lookupTimeoutRef.current = setTimeout(async () => {
+        try {
+          const found = await bookingService.findCustomerByPhone(cleanPhone);
+          if (found) {
+            setMatchedCustomer(found);
+            setWalkInForm((prev) => ({
+              ...prev,
+              customerName: prev.customerName || found.customerName || '',
+              bikeModel: found.bikeModel || prev.bikeModel || 'Yamaha FZ-S V3',
+              vehicleNo: prev.vehicleNo || found.vehicleNo || '',
+              userId: found.userId || null
+            }));
+          } else {
+            setMatchedCustomer(null);
+            setWalkInForm((prev) => ({ ...prev, userId: null }));
+          }
+        } catch (err) {
+          console.warn('Customer lookup error:', err);
+        } finally {
+          setLookupLoading(false);
+        }
+      }, 350);
+    } else {
+      setMatchedCustomer(null);
+      setWalkInForm((prev) => ({ ...prev, userId: null }));
+    }
+  };
+
+  const openWalkInModal = () => {
+    setWalkInForm(initialWalkInState);
+    setMatchedCustomer(null);
+    setWalkInError('');
+    setShowWalkInModal(true);
+  };
+
   const handleWalkInSubmit = async (e) => {
     e.preventDefault();
     setWalkInError('');
     setWalkInSubmitting(true);
 
     // Guard: only authenticated admins may use this path.
-    // Privileges are validated against server app_metadata or canonical profiles role.
     const isUserAdmin = Boolean(user?.isAdmin || user?.role === 'admin');
     if (!isUserAdmin) {
       setWalkInError('Access denied: admin session required.');
@@ -127,7 +236,21 @@ export default function Admin() {
       return;
     }
 
-    const validation = validateBookingData(walkInForm);
+    let cleanPhone = walkInForm.phone.trim().replace(/[\s-]/g, '');
+    if (cleanPhone.startsWith('+94')) {
+      cleanPhone = '0' + cleanPhone.slice(3);
+    } else if (cleanPhone.startsWith('94') && cleanPhone.length === 11) {
+      cleanPhone = '0' + cleanPhone.slice(2);
+    }
+
+    const validation = validateBookingData({
+      name: walkInForm.customerName,
+      phone: cleanPhone,
+      bikeModel: walkInForm.bikeModel,
+      vehicleNo: walkInForm.vehicleNo,
+      serviceType: walkInForm.serviceType
+    });
+
     if (!validation.valid) {
       setWalkInError(Object.values(validation.errors)[0]);
       setWalkInSubmitting(false);
@@ -148,31 +271,26 @@ export default function Admin() {
 
     try {
       const newBooking = {
-        name: walkInForm.name,
-        phone: walkInForm.phone,
-        nic: walkInForm.nic,
-        bikeModel: walkInForm.bikeModel,
+        name: walkInForm.customerName.trim(),
+        phone: cleanPhone,
+        nic: 'Walk-in',
+        bikeModel: walkInForm.bikeModel.trim(),
         mileage: walkInForm.mileage ? String(walkInForm.mileage).trim() : '',
-        vehicleNo: walkInForm.vehicleNo,
+        vehicleNo: walkInForm.vehicleNo.trim().toUpperCase(),
         serviceType: walkInForm.serviceType,
         date: selectedDate,
-        // isWalkIn tells the service this is a same-day walk-in (exempt from the
-        // advance-booking rule). Admin privilege is verified from the session,
-        // NOT passed as a flag in the payload — never trust client-supplied roles.
-        isWalkIn: true
+        isWalkIn: true,
+        // Crucial decoupling: Pass customer's profile ID if matched/registered,
+        // or NULL for unregistered guest walk-in. The admin's ID is only passed to createdBy!
+        userId: walkInForm.userId || null,
+        createdBy: user?.id || null,
+        customerNotes: walkInForm.customerNotes ? String(walkInForm.customerNotes).trim() : ''
       };
 
       await addBooking(newBooking);
       setShowWalkInModal(false);
-      setWalkInForm({
-        name: '',
-        phone: '',
-        nic: 'Walk-in',
-        bikeModel: 'Yamaha FZ-S V3',
-        mileage: '',
-        vehicleNo: '',
-        serviceType: 'Full Service'
-      });
+      setWalkInForm(initialWalkInState);
+      setMatchedCustomer(null);
     } catch (err) {
       setWalkInError(err.message || 'Failed to create walk-in booking');
     } finally {
@@ -186,79 +304,152 @@ export default function Admin() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface border border-border p-6 rounded-2xl shadow-md">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
-              <ShieldCheck className="w-8 h-8 text-blue-500" /> Admin Workshop Control
+            <h1 className="text-2xl sm:text-3xl font-black text-mainText flex items-center gap-2.5">
+              <ShieldCheck className="w-8 h-8 text-brandBlue" /> Admin Workshop Control
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/30">
+            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/30">
               STAFF PORTAL
             </span>
           </div>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-sm text-mutedText mt-1">
             Real-time queue monitoring, walk-in token generation, and service progress tracking
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl">
-            <Calendar className="w-4 h-4 text-white" />
+          <div className="flex items-center gap-2 bg-surfaceMuted border border-border px-3.5 py-2 rounded-xl">
+            <Calendar className="w-4 h-4 text-mutedText" />
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-white text-sm outline-none font-mono"
+              className="bg-transparent text-mainText text-sm outline-none font-mono"
             />
           </div>
 
           <Button
             variant="primary"
-            onClick={() => setShowWalkInModal(true)}
+            onClick={openWalkInModal}
             className="flex items-center gap-2"
           >
-            <PlusCircle className="w-4 h-4" /> + Walk-In Booking
+            <PlusCircle className="w-4 h-4" /> + {t('admin.issueWalkInBtn', 'Walk-In Booking')}
           </Button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
-          <div className="flex justify-between items-center text-slate-400">
+      {/* Admin Section Tabs */}
+      <div className="flex items-center gap-2 border-b border-border pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('bookings')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            activeTab === 'bookings'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-surface hover:bg-muted text-subText border border-border'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span>Bookings & Queue Control</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] ${
+            activeTab === 'bookings' ? 'bg-white/20 text-white' : 'bg-muted text-mutedText'
+          }`}>
+            {dayBookings.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('gallery')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            activeTab === 'gallery'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-surface hover:bg-muted text-subText border border-border'
+          }`}
+        >
+          <ImageIcon className="w-4 h-4" />
+          <span>Workshop Photos (Gallery)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('inquiries')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            activeTab === 'inquiries'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-surface hover:bg-muted text-subText border border-border'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>{t('admin.inquiriesTab', 'Customer Messages')}</span>
+          {newInquiryCount > 0 ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white animate-pulse">
+              {newInquiryCount} {t('admin.newInquiriesBadge', 'New')}
+            </span>
+          ) : null}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('customers')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            activeTab === 'customers'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-surface hover:bg-muted text-subText border border-border'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>{t('admin.customersTab', 'Customer Directory')}</span>
+        </button>
+      </div>
+
+      {activeTab === 'customers' ? (
+        <CustomerDirectory />
+      ) : activeTab === 'inquiries' ? (
+        <InquiryManager onNewCountChange={setNewInquiryCount} />
+      ) : activeTab === 'gallery' ? (
+        <GalleryManager />
+      ) : (
+        <>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-surface border border-border p-5 rounded-2xl shadow-md">
+          <div className="flex justify-between items-center text-subText">
             <span className="text-xs font-semibold uppercase tracking-wider">Date Tokens</span>
-            <Clock className="w-4 h-4 text-blue-400" />
+            <Clock className="w-4 h-4 text-brandBlue" />
           </div>
           <div className="flex items-baseline justify-between mt-2">
-            <p className="text-3xl font-black text-white">
-              {stats.totalBooked} <span className="text-sm font-normal text-slate-500">/ {stats.maxDailySlots}</span>
+            <p className="text-3xl font-black text-mainText">
+              {stats.totalBooked} <span className="text-sm font-normal text-mutedText">/ {stats.maxDailySlots}</span>
             </p>
-            <span className="text-xs font-bold text-blue-400">
+            <span className="text-xs font-bold text-brandBlue">
               {Math.round((stats.totalBooked / stats.maxDailySlots) * 100)}% Cap
             </span>
           </div>
-          <div className="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+          <div className="w-full bg-surfaceMuted h-1.5 rounded-full mt-3 overflow-hidden border border-border/40">
             <div
-              className={`h-full ${stats.isDayFull ? 'bg-red-500' : 'bg-blue-500'}`}
+              className={`h-full ${stats.isDayFull ? 'bg-red-500' : 'bg-brandBlue'}`}
               style={{ width: `${Math.min(100, (stats.totalBooked / stats.maxDailySlots) * 100)}%` }}
             />
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
-          <div className="flex justify-between items-center text-slate-400">
+        <div className="bg-surface border border-border p-5 rounded-2xl shadow-md">
+          <div className="flex justify-between items-center text-subText">
             <span className="text-xs font-semibold uppercase tracking-wider">Free Service Quota</span>
-            <Wrench className="w-4 h-4 text-indigo-400" />
+            <Wrench className="w-4 h-4 text-indigo-500" />
           </div>
           <div className="flex items-baseline justify-between mt-2">
-            <p className="text-3xl font-black text-white">
-              {stats.freeServices} <span className="text-sm font-normal text-slate-500">/ {stats.maxFreeServices}</span>
+            <p className="text-3xl font-black text-mainText">
+              {stats.freeServices} <span className="text-sm font-normal text-mutedText">/ {stats.maxFreeServices}</span>
             </p>
-            <span className={`text-xs font-bold ${stats.isFreeServiceFull ? 'text-red-400' : 'text-green-400'}`}>
+            <span className={`text-xs font-bold ${stats.isFreeServiceFull ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>
               {stats.isFreeServiceFull ? 'Quota Full' : `${stats.availableFreeSlots} Left`}
             </span>
           </div>
-          <div className="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+          <div className="w-full bg-surfaceMuted h-1.5 rounded-full mt-3 overflow-hidden border border-border/40">
             <div
               className={`h-full ${stats.isFreeServiceFull ? 'bg-red-500' : 'bg-indigo-500'}`}
               style={{ width: `${Math.min(100, (stats.freeServices / stats.maxFreeServices) * 100)}%` }}
@@ -266,20 +457,20 @@ export default function Admin() {
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
-          <div className="flex justify-between items-center text-slate-400">
+        <div className="bg-surface border border-border p-5 rounded-2xl shadow-md">
+          <div className="flex justify-between items-center text-subText">
             <span className="text-xs font-semibold uppercase tracking-wider">Full & Normal Quota</span>
-            <Wrench className="w-4 h-4 text-purple-400" />
+            <Wrench className="w-4 h-4 text-purple-500" />
           </div>
           <div className="flex items-baseline justify-between mt-2">
-            <p className="text-3xl font-black text-white">
-              {stats.standardServices || 0} <span className="text-sm font-normal text-slate-500">/ {stats.maxStandardServices || 7}</span>
+            <p className="text-3xl font-black text-mainText">
+              {stats.standardServices || 0} <span className="text-sm font-normal text-mutedText">/ {stats.maxStandardServices || 7}</span>
             </p>
-            <span className={`text-xs font-bold ${stats.isStandardServiceFull ? 'text-red-400' : 'text-purple-400'}`}>
+            <span className={`text-xs font-bold ${stats.isStandardServiceFull ? 'text-red-500' : 'text-purple-600 dark:text-purple-400'}`}>
               {stats.isStandardServiceFull ? 'Quota Full' : `${stats.availableStandardSlots} Left`}
             </span>
           </div>
-          <div className="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+          <div className="w-full bg-surfaceMuted h-1.5 rounded-full mt-3 overflow-hidden border border-border/40">
             <div
               className={`h-full ${stats.isStandardServiceFull ? 'bg-red-500' : 'bg-purple-500'}`}
               style={{ width: `${Math.min(100, ((stats.standardServices || 0) / (stats.maxStandardServices || 7)) * 100)}%` }}
@@ -287,20 +478,20 @@ export default function Admin() {
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
-          <div className="flex justify-between items-center text-slate-400">
+        <div className="bg-surface border border-border p-5 rounded-2xl shadow-md">
+          <div className="flex justify-between items-center text-subText">
             <span className="text-xs font-semibold uppercase tracking-wider">Progress</span>
-            <CheckCircle2 className="w-4 h-4 text-green-400" />
+            <CheckCircle2 className="w-4 h-4 text-green-500" />
           </div>
           <div className="flex items-baseline justify-between mt-2">
-            <p className="text-3xl font-black text-green-400">
-              {completedCount} <span className="text-sm font-normal text-amber-400">({inServiceCount} Active)</span>
+            <p className="text-3xl font-black text-green-600 dark:text-green-400">
+              {completedCount} <span className="text-sm font-normal text-amber-600 dark:text-amber-400">({inServiceCount} Active)</span>
             </p>
-            <span className="text-xs font-bold text-slate-400">
+            <span className="text-xs font-bold text-mutedText">
               {stats.totalBooked > 0 ? Math.round((completedCount / stats.totalBooked) * 100) : 0}% Done
             </span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-3 truncate">
+          <p className="text-[11px] text-mutedText mt-3 truncate">
             {stats.totalBooked - completedCount} bikes pending for {selectedDate}
           </p>
         </div>
@@ -308,14 +499,14 @@ export default function Admin() {
 
       {/* Notice Banner if bookings exist on other dates */}
       {dateViewMode === 'selected' && stats.dayBookings.length === 0 && otherDateBookingsCount > 0 && (
-        <div className="bg-blue-950/40 border border-blue-800/60 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-blue-200">
+        <div className="bg-brandBlue/10 border border-brandBlue/30 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-mainText shadow-sm">
           <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-blue-400 shrink-0" />
+            <Clock className="w-5 h-5 text-brandBlue shrink-0" />
             <div>
-              <p className="font-semibold text-white">
+              <p className="font-semibold text-mainText">
                 No tokens for selected date ({selectedDate}), but {otherDateBookingsCount} booking(s) exist on other dates!
               </p>
-              <p className="text-[11px] text-blue-300/80">
+              <p className="text-[11px] text-subText">
                 (Customers book at least 1 day in advance, e.g. booking for {otherDateSample}).
               </p>
             </div>
@@ -325,7 +516,7 @@ export default function Admin() {
               <button
                 type="button"
                 onClick={() => setSelectedDate(otherDateSample)}
-                className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg transition"
+                className="bg-brandBlue hover:opacity-90 text-white font-bold px-3 py-1.5 rounded-lg transition"
               >
                 Go to {otherDateSample}
               </button>
@@ -333,7 +524,7 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setDateViewMode('all')}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded-lg transition"
+              className="bg-surfaceMuted hover:bg-border text-mainText border border-border font-bold px-3 py-1.5 rounded-lg transition"
             >
               View All Dates ({bookings.length})
             </button>
@@ -342,27 +533,27 @@ export default function Admin() {
       )}
 
       {/* Bookings Queue Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-        <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+      <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-md">
+        <div className="p-4 border-b border-border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h3 className="font-bold text-white text-base">
+            <h3 className="font-bold text-mainText text-base">
               {dateViewMode === 'all' ? 'All Booked Services' : `Service Tokens (${selectedDate})`}
             </h3>
-            <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 text-xs font-mono font-semibold">
+            <span className="px-2 py-0.5 rounded-md bg-brandBlue/10 text-brandBlue text-xs font-mono font-semibold">
               {filteredBookings.length} Tokens
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             {/* View Mode Toggle */}
-            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+            <div className="flex bg-surfaceMuted p-1 rounded-xl border border-border text-xs">
               <button
                 type="button"
                 onClick={() => setDateViewMode('selected')}
                 className={`px-2.5 py-1 rounded-lg font-semibold transition ${
                   dateViewMode === 'selected'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-brandBlue text-white'
+                    : 'text-subText hover:text-mainText'
                 }`}
               >
                 Day View
@@ -372,8 +563,8 @@ export default function Admin() {
                 onClick={() => setDateViewMode('all')}
                 className={`px-2.5 py-1 rounded-lg font-semibold transition ${
                   dateViewMode === 'all'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-brandBlue text-white'
+                    : 'text-subText hover:text-mainText'
                 }`}
               >
                 All Dates ({bookings.length})
@@ -381,20 +572,20 @@ export default function Admin() {
             </div>
 
             <div className="relative flex-1 sm:w-48">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-mutedText absolute left-3 top-2.5" />
               <input
                 type="text"
                 placeholder="Search name, phone, plate..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 text-xs rounded-xl pl-9 pr-3 py-2 text-white outline-none focus:border-blue-500"
+                className="w-full bg-surfaceMuted border border-border text-xs rounded-xl pl-9 pr-3 py-2 text-mainText placeholder-mutedText outline-none focus:border-brandBlue"
               />
             </div>
 
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-2.5 py-2 text-white outline-none"
+              className="bg-surfaceMuted border border-border text-xs rounded-xl px-2.5 py-2 text-mainText outline-none focus:border-brandBlue"
             >
               <option value="all">All Statuses</option>
               <option value="Pending">Pending</option>
@@ -406,7 +597,7 @@ export default function Admin() {
             <button
               onClick={refreshBookings}
               title="Refresh bookings"
-              className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-800 rounded-xl transition"
+              className="p-2 text-subText hover:text-brandBlue hover:bg-surfaceMuted rounded-xl transition"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582M20 20v-5h-.581M5.635 19A9 9 0 104.582 9H4" />
@@ -416,14 +607,14 @@ export default function Admin() {
         </div>
 
         {statusUpdateError && (
-          <div className="mx-6 mt-4 p-3 bg-red-950/70 border border-red-800 text-red-300 rounded-xl text-xs flex items-center justify-between gap-2">
+          <div className="mx-6 mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-xl text-xs flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
               <span>{statusUpdateError}</span>
             </div>
             <button
               onClick={() => setStatusUpdateError('')}
-              className="text-red-400 hover:text-red-200 text-xs font-bold px-2 py-0.5"
+              className="text-red-600 dark:text-red-400 hover:opacity-80 text-xs font-bold px-2 py-0.5"
             >
               ✕
             </button>
@@ -431,8 +622,8 @@ export default function Admin() {
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300 min-w-[720px]">
-            <thead className="bg-slate-950 text-slate-400 text-xs uppercase tracking-wider font-semibold">
+          <table className="w-full text-left text-sm text-mainText min-w-[720px]">
+            <thead className="bg-surfaceMuted text-subText text-xs uppercase tracking-wider font-semibold border-b border-border">
               <tr>
                 <th className="px-6 py-3.5">Token #</th>
                 <th className="px-6 py-3.5">Date</th>
@@ -444,13 +635,13 @@ export default function Admin() {
                 <th className="px-6 py-3.5 whitespace-nowrap w-36">Update Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 bg-slate-900">
+            <tbody className="divide-y divide-border bg-surface">
               {bookingsLoading ? (
                 <tr>
                   <td colSpan="8" className="text-center py-14">
                     <div className="flex flex-col items-center gap-3">
-                      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <p className="text-slate-400 text-sm">Loading bookings for {selectedDate}...</p>
+                      <div className="w-8 h-8 border-2 border-brandBlue border-t-transparent rounded-full animate-spin" />
+                      <p className="text-mutedText text-sm">Loading bookings for {selectedDate}...</p>
                     </div>
                   </td>
                 </tr>
@@ -458,12 +649,12 @@ export default function Admin() {
                 <tr>
                   <td colSpan="8" className="text-center py-12">
                     <div className="flex flex-col items-center gap-3">
-                      <AlertTriangle className="w-8 h-8 text-red-400" />
-                      <p className="text-red-400 text-sm font-semibold">Failed to load bookings</p>
-                      <p className="text-slate-500 text-xs max-w-xs text-center">{bookingsError}</p>
+                      <AlertTriangle className="w-8 h-8 text-red-500" />
+                      <p className="text-red-500 text-sm font-semibold">Failed to load bookings</p>
+                      <p className="text-mutedText text-xs max-w-xs text-center">{bookingsError}</p>
                       <button
                         onClick={refreshBookings}
-                        className="mt-1 text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                        className="mt-1 text-xs text-brandBlue hover:underline underline-offset-2"
                       >
                         Try again
                       </button>
@@ -473,39 +664,64 @@ export default function Admin() {
               ) : (
                 <>
                   {filteredBookings.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-800/40 transition">
-                      <td className="px-6 py-4 font-mono font-bold text-blue-400 text-base">
+                    <tr key={item.id} className="hover:bg-surfaceMuted/60 transition">
+                      <td className="px-6 py-4 font-mono font-bold text-brandBlue text-base">
                         #{String(item.tokenNo).padStart(2, '00')}
                       </td>
-                      <td className="px-6 py-4 font-semibold text-slate-200 text-xs font-mono">
+                      <td className="px-6 py-4 font-semibold text-mainText text-xs font-mono">
                         <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-white" />
+                          <Calendar className="w-3.5 h-3.5 text-mutedText" />
                           <span>{item.date}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 font-semibold text-white text-xs">{item.timeSlot}</td>
+                      <td className="px-6 py-4 font-semibold text-mainText text-xs">{item.timeSlot}</td>
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-white leading-tight">{item.name}</p>
-                        <p className="text-xs text-slate-400 font-mono mt-0.5">{item.phone}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-mainText leading-tight">{item.name}</p>
+                          {item.isWalkIn || item.nic?.toLowerCase() === 'walk-in' ? (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                              {t('admin.walkInBadge', 'Walk-In')}
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                              {t('admin.onlineBadge', 'Online')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <a
+                            href={`tel:${item.phone}`}
+                            className="text-xs text-brandBlue dark:text-blue-400 font-mono hover:underline inline-flex items-center gap-1 font-semibold"
+                            title={t('admin.callCustomer', 'Call customer')}
+                          >
+                            <Phone className="w-3 h-3 text-brandBlue shrink-0" />
+                            <span>{item.phone}</span>
+                          </a>
+                        </div>
+                        {item.customerNotes && (
+                          <div className="mt-1.5 text-[11px] text-amber-800 dark:text-amber-200 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 max-w-xs break-words">
+                            <span className="font-bold">Note:</span> {item.customerNotes}
+                          </div>
+                        )}
                         {item.profile?.nic && item.profile.nic !== 'N/A' && (
-                          <span className="text-[10px] text-slate-500 font-mono block mt-0.5">NIC: {item.profile.nic}</span>
+                          <span className="text-[10px] text-mutedText font-mono block mt-0.5">NIC: {item.profile.nic}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-slate-200">
+                      <td className="px-6 py-4 text-mainText">
                         <div>{item.bikeModel}</div>
                         {item.mileage && (
-                          <span className="text-[11px] text-slate-400 font-mono">{item.mileage} km</span>
+                          <span className="text-[11px] text-mutedText font-mono">{item.mileage} km</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-slate-300 font-mono text-xs">
+                      <td className="px-6 py-4 text-subText font-mono text-xs">
                         {item.vehicleNo || 'N/A'}
                       </td>
                       <td className="px-6 py-4">
                         <span
                           className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
                             item.serviceType === 'Free Service'
-                              ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
-                              : 'bg-slate-800 text-slate-300'
+                              ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30'
+                              : 'bg-surfaceMuted border border-border text-subText'
                           }`}
                         >
                           {item.serviceType}
@@ -519,14 +735,14 @@ export default function Admin() {
                               value={item.status}
                               onChange={(e) => handleStatusChange(item, e.target.value)}
                               title={isFuture ? 'Service date has not arrived yet' : ''}
-                              className={`w-28 text-xs rounded-lg px-2.5 py-1 text-white outline-none border font-semibold cursor-pointer transition ${
+                              className={`w-28 text-xs rounded-lg px-2.5 py-1 outline-none border font-semibold cursor-pointer transition ${
                                 item.status === 'Completed'
-                                  ? 'bg-green-950 border-green-800 text-green-300'
+                                  ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-300'
                                   : item.status === 'In-Service'
-                                  ? 'bg-amber-950 border-amber-800 text-amber-300'
+                                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300'
                                   : item.status === 'Cancelled'
-                                  ? 'bg-red-950 border-red-800 text-red-300'
-                                  : 'bg-slate-950 border-slate-700 text-slate-300'
+                                  ? 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-300'
+                                  : 'bg-surfaceMuted border-border text-subText'
                               }`}
                             >
                               <option value="Pending">Pending</option>
@@ -545,7 +761,7 @@ export default function Admin() {
                   ))}
                   {filteredBookings.length === 0 && (
                     <tr>
-                      <td colSpan="8" className="text-center py-12 text-slate-500 text-sm">
+                      <td colSpan="8" className="text-center py-12 text-mutedText text-sm">
                         No service tokens found for {selectedDate}.
                       </td>
                     </tr>
@@ -556,75 +772,158 @@ export default function Admin() {
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* Walk-in Booking Modal */}
       <Modal
         isOpen={showWalkInModal}
         onClose={() => setShowWalkInModal(false)}
-        title="Issue Walk-In / Phone Token"
-        subtitle={`Generate a service token for ${selectedDate}`}
+        title={t('admin.issueWalkInTitle', 'Issue Walk-In / Phone Token')}
+        subtitle={`${t('admin.issueWalkInSubtitle', 'Generate an on-demand service token for')} ${selectedDate}`}
       >
-        <form onSubmit={handleWalkInSubmit} className="space-y-4">
+        <form onSubmit={handleWalkInSubmit} className="space-y-3.5">
           {walkInError && (
-            <div className="p-3 bg-red-950/60 border border-red-800 text-red-300 rounded-xl text-xs flex items-center gap-2">
+            <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-xl text-xs flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>{walkInError}</span>
             </div>
           )}
 
+          {/* Customer Phone & Smart Lookup */}
+          <div>
+            <Input
+              label={t('admin.customerPhone', 'Customer Phone')}
+              icon={Phone}
+              type="tel"
+              required
+              placeholder="e.g. 0771234567"
+              value={walkInForm.phone}
+              onChange={handlePhoneChange}
+              helperText={t('admin.phoneLookupHelper', 'Enter 10-digit number (e.g. 0771234567) to autofill registered customer')}
+            />
+
+            {/* Smart Lookup Status Badges */}
+            {lookupLoading && (
+              <div className="mt-1.5 flex items-center gap-2 text-xs text-mutedText animate-pulse">
+                <div className="w-3.5 h-3.5 border-2 border-brandBlue border-t-transparent rounded-full animate-spin" />
+                <span>Checking customer records...</span>
+              </div>
+            )}
+
+            {!lookupLoading && matchedCustomer?.source === 'registered_profile' && (
+              <div className="mt-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{t('admin.registeredCustomerFound', 'Registered Customer Found:')} {matchedCustomer.customerName}</span>
+                  </div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                    Online Sync
+                  </span>
+                </div>
+
+                {matchedCustomer.vehicles?.length > 0 && (
+                  <div className="mt-2 pt-1.5 border-t border-emerald-500/20 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">Garage Bikes:</span>
+                    {matchedCustomer.vehicles.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setWalkInForm((prev) => ({
+                          ...prev,
+                          bikeModel: v.bikeModel,
+                          vehicleNo: v.vehiclePlate
+                        }))}
+                        className="px-2 py-0.5 rounded text-[11px] font-semibold bg-white dark:bg-slate-900 border border-emerald-400/40 text-emerald-900 dark:text-emerald-100 hover:border-emerald-600 transition flex items-center gap-1 shadow-2xs"
+                      >
+                        <Bike className="w-3 h-3 text-emerald-600" />
+                        <span>{v.vehiclePlate} ({v.bikeModel})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!lookupLoading && (matchedCustomer?.source === 'past_walk_in' || matchedCustomer?.source === 'past_booking') && (
+              <div className="mt-2 p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-800 dark:text-blue-200 text-xs flex items-center gap-1.5 font-medium">
+                <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>
+                  <strong className="font-bold">{t('admin.returningCustomerFound', 'Returning Customer Found:')}</strong>{' '}
+                  {matchedCustomer.customerName}
+                </span>
+              </div>
+            )}
+
+            {!lookupLoading && !matchedCustomer && walkInForm.phone.replace(/[\s-]/g, '').length === 10 && (
+              <div className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-slate-400" />
+                <span>{t('admin.guestWalkIn', 'Unregistered Guest Customer — Will book without account')}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Customer Name */}
           <Input
-            label="Customer Name"
+            label={t('admin.customerName', 'Customer Name')}
             icon={User}
             required
             placeholder="e.g. Kasun Kalhara"
-            value={walkInForm.name}
-            onChange={(e) => setWalkInForm({ ...walkInForm, name: e.target.value })}
+            value={walkInForm.customerName}
+            onChange={(e) => setWalkInForm({ ...walkInForm, customerName: e.target.value })}
           />
 
+          {/* Bike Model selection */}
+          <div>
+            <label className="block text-xs font-semibold text-subText mb-1.5">
+              {t('admin.bikeModel', 'Bike Model')} <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <Bike className="w-4 h-4 text-mutedText absolute left-3.5 top-3 pointer-events-none" />
+              <select
+                value={walkInForm.bikeModel}
+                onChange={(e) => setWalkInForm({ ...walkInForm, bikeModel: e.target.value })}
+                className="w-full bg-surfaceMuted border border-border text-mainText text-sm rounded-xl pl-10 pr-3.5 py-2.5 outline-none focus:border-brandBlue transition"
+              >
+                {YAMAHA_MODELS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Vehicle Plate Number */}
           <Input
-            label="Customer Phone"
-            icon={Phone}
-            type="tel"
+            label={t('admin.plateNumber', 'Vehicle Plate Number')}
+            icon={CreditCard}
             required
-            placeholder="e.g. 0771234567"
-            value={walkInForm.phone}
-            onChange={(e) => setWalkInForm({ ...walkInForm, phone: e.target.value })}
+            placeholder={t('admin.platePlaceholder', 'e.g. BAP-4521')}
+            value={walkInForm.vehicleNo}
+            onChange={(e) => setWalkInForm({ ...walkInForm, vehicleNo: e.target.value.toUpperCase() })}
+            autoCapitalize="characters"
           />
 
+          {/* Mileage (Optional) */}
           <Input
-            label="Bike Model"
-            icon={Bike}
-            required
-            placeholder="e.g. Yamaha FZ-S V3"
-            value={walkInForm.bikeModel}
-            onChange={(e) => setWalkInForm({ ...walkInForm, bikeModel: e.target.value })}
-          />
-
-          <Input
-            label="Mileage (km)"
+            label={t('admin.mileage', 'Mileage (km)')}
             icon={Gauge}
             type="number"
             placeholder="e.g. 15000"
             value={walkInForm.mileage}
             onChange={(e) => setWalkInForm({ ...walkInForm, mileage: e.target.value })}
-            helperText="Enter odometer reading in kilometers"
+            helperText={t('admin.mileageHelper', 'Enter odometer reading in kilometers')}
           />
 
-          <Input
-            label="Vehicle Plate Number"
-            icon={CreditCard}
-            required
-            placeholder="e.g. BAP-4521"
-            value={walkInForm.vehicleNo}
-            onChange={(e) => setWalkInForm({ ...walkInForm, vehicleNo: e.target.value })}
-          />
-
+          {/* Service Type with Quota indicators */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Service Type</label>
+            <label className="block text-xs font-semibold text-subText mb-1.5">
+              {t('admin.serviceType', 'Service Type')}
+            </label>
             <select
               value={walkInForm.serviceType}
               onChange={(e) => setWalkInForm({ ...walkInForm, serviceType: e.target.value })}
-              className="w-full bg-slate-950 border border-slate-800 text-white text-sm rounded-xl px-3.5 py-2.5 outline-none focus:border-blue-500"
+              className="w-full bg-surfaceMuted border border-border text-mainText text-sm rounded-xl px-3.5 py-2.5 outline-none focus:border-brandBlue transition"
             >
               <option value="Full Service" disabled={stats.isStandardServiceFull}>
                 Full Service {stats.isStandardServiceFull ? '(Quota Full - 7/7)' : `(${stats.availableStandardSlots} / ${stats.maxStandardServices || 7} left)`}
@@ -638,12 +937,29 @@ export default function Admin() {
             </select>
           </div>
 
-          <div className="flex gap-3 pt-3">
+          {/* Customer Complaints / Notes */}
+          <div>
+            <label className="block text-xs font-semibold text-subText mb-1.5 flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5 text-mutedText" />
+              <span>{t('admin.customerNotes', 'Customer Complaints / Notes')}</span>
+              <span className="text-mutedText font-normal">({t('common.optional', 'Optional')})</span>
+            </label>
+            <textarea
+              rows={2}
+              placeholder={t('admin.customerNotesPlaceholder', 'e.g. Engine sound at 60km/h, front brake loose, oil change')}
+              value={walkInForm.customerNotes}
+              onChange={(e) => setWalkInForm({ ...walkInForm, customerNotes: e.target.value })}
+              className="w-full bg-surfaceMuted border border-border text-mainText text-sm rounded-xl px-3.5 py-2 outline-none focus:border-brandBlue transition resize-none placeholder-mutedText"
+            />
+          </div>
+
+          {/* Submit / Cancel Action Buttons */}
+          <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setShowWalkInModal(false)}>
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button type="submit" variant="primary" disabled={walkInSubmitting || stats.isDayFull} className="flex-1">
-              {walkInSubmitting ? 'Generating...' : 'Issue Token'}
+              {walkInSubmitting ? t('admin.generatingBtn', 'Generating...') : t('admin.generateTokenBtn', 'Issue Token')}
             </Button>
           </div>
         </form>

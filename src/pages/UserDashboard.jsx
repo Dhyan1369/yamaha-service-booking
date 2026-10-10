@@ -9,7 +9,7 @@ import { useBookings } from '../hooks/useBookings';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function UserDashboard() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { getUserBookings, cancelBooking, refreshBookings } = useBookings();
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -42,6 +42,17 @@ export default function UserDashboard() {
       window.history.replaceState({}, document.title);
     }
   }, [location.state?.newBookingToken]);
+
+  if (loading && !user) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+          <p className="text-xs text-slate-400">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
