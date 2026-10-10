@@ -70,7 +70,7 @@ export const validatePassword = (passwordStr) => {
   return { valid: true, message: '' };
 };
 
-export const validateBookingData = ({ name, phone, bikeModel, vehicleNo, serviceType }) => {
+export const validateBookingData = ({ name, phone, bikeModel, vehicleNo, serviceType, mileage }) => {
   const errors = {};
   if (!name?.trim()) errors.name = 'Customer name is required';
   if (!bikeModel?.trim()) errors.bikeModel = 'Bike model is required';
@@ -81,6 +81,13 @@ export const validateBookingData = ({ name, phone, bikeModel, vehicleNo, service
 
   const phoneCheck = validatePhone(phone);
   if (!phoneCheck.valid) errors.phone = phoneCheck.message;
+
+  if (mileage !== undefined && mileage !== null && String(mileage).trim() !== '') {
+    const num = Number(mileage);
+    if (isNaN(num) || num < 0) {
+      errors.mileage = 'Mileage cannot be negative';
+    }
+  }
 
   return { valid: Object.keys(errors).length === 0, errors };
 };
