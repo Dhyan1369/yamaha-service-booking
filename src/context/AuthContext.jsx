@@ -16,28 +16,23 @@ async function hashPassword(plain) {
 export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  // Synchronously hydrate initial user from localStorage to eliminate Auth Flash / Session Hydration lag
   const [user, setUser] = useState(() => {
-    if (!isSupabaseConfigured) {
-      try {
-        const stored = localStorage.getItem('yamaha_current_user');
-        return stored ? JSON.parse(stored) : null;
-      } catch {
-        return null;
-      }
+    try {
+      const stored = localStorage.getItem('yamaha_current_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
     }
-    return null;
   });
 
   const [session, setSession] = useState(() => {
-    if (!isSupabaseConfigured) {
-      try {
-        const stored = localStorage.getItem('yamaha_current_user');
-        return stored ? { user: JSON.parse(stored) } : null;
-      } catch {
-        return null;
-      }
+    try {
+      const stored = localStorage.getItem('yamaha_current_user');
+      return stored ? { user: JSON.parse(stored) } : null;
+    } catch {
+      return null;
     }
-    return null;
   });
 
   const [loading, setLoading] = useState(isSupabaseConfigured);
@@ -144,6 +139,9 @@ export function AuthProvider({ children }) {
       (effectiveAdmin ? 'Admin Manager' : rawPhone || 'Customer');
 
     const nic = profile?.nic || meta.nic || '';
+    const isActive = profile?.is_active !== undefined
+      ? Boolean(profile.is_active)
+      : (meta.isActive !== undefined ? Boolean(meta.isActive) : true);
 
     return {
       id: sbUser.id || 'usr_' + (rawPhone || 'guest'),
@@ -158,6 +156,9 @@ export function AuthProvider({ children }) {
       defaultVehiclePlate: vehiclePlate,
       avatarUrl: meta.avatarUrl || meta.avatar_url || sbUser.avatarUrl || sbUser.avatar_url || '',
       isAdmin: Boolean(effectiveAdmin),
+      isActive: isActive,
+      is_active: isActive,
+      adminNotes: profile?.admin_notes || meta.adminNotes || '',
       rawUser: sbUser,
       profile: profile || null
     };
@@ -169,15 +170,34 @@ export function AuthProvider({ children }) {
 
       const initSession = async () => {
         try {
-          const { data: { session: initialSession } } = await supabase.auth.getSession();
+          const { data: { session: initialSession }, error } = await supabase.auth.getSession();
           if (!isMounted) return;
+          if (error) {
+            console.warn('[AuthContext] Error retrieving session:', error.message);
+          }
           setSession(initialSession);
           if (initialSession?.user) {
             const profile = await fetchProfile(initialSession.user.id);
-            if (isMounted) setUser(formatUser(initialSession.user, profile));
+            if (isMounted) {
+              const formatted = formatUser(initialSession.user, profile);
+              setUser(formatted);
+              if (formatted) {
+                try {
+                  localStorage.setItem('yamaha_current_user', JSON.stringify(formatted));
+                } catch (e) {
+                  console.warn('[AuthContext] Failed to cache user profile:', e);
+                }
+              }
+            }
           } else {
-            if (isMounted) setUser(null);
+            // No active Supabase session — clear any stale cached session
+            if (isMounted) {
+              setUser(null);
+              localStorage.removeItem('yamaha_current_user');
+            }
           }
+        } catch (err) {
+          console.warn('[AuthContext] Session initialization exception:', err);
         } finally {
           if (isMounted) setLoading(false);
         }
@@ -187,14 +207,32 @@ export function AuthProvider({ children }) {
 
       const {
         data: { subscription }
-      } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      } = supabase.auth.onAuthStateChange(async (event, newSession) => {
         if (!isMounted) return;
+
+        if (event === 'SIGNED_OUT' || !newSession) {
+          setSession(null);
+          setUser(null);
+          localStorage.removeItem('yamaha_current_user');
+          if (isMounted) setLoading(false);
+          return;
+        }
+
         setSession(newSession);
+
         if (newSession?.user) {
           const profile = await fetchProfile(newSession.user.id);
-          if (isMounted) setUser(formatUser(newSession.user, profile));
-        } else {
-          if (isMounted) setUser(null);
+          if (isMounted) {
+            const formatted = formatUser(newSession.user, profile);
+            setUser(formatted);
+            if (formatted) {
+              try {
+                localStorage.setItem('yamaha_current_user', JSON.stringify(formatted));
+              } catch (e) {
+                console.warn('[AuthContext] Failed to cache user profile:', e);
+              }
+            }
+          }
         }
         if (isMounted) setLoading(false);
       });
@@ -525,6 +563,11 @@ export function AuthProvider({ children }) {
         formatted.avatarUrl = rawAvatar;
       }
       setUser(formatted);
+      try {
+        localStorage.setItem('yamaha_current_user', JSON.stringify(formatted));
+      } catch (e) {
+        console.warn('[AuthContext] Failed to cache user on profile update:', e);
+      }
       return formatted;
     } else if (user) {
       const updatedUser = { 
@@ -552,12 +595,17 @@ export function AuthProvider({ children }) {
 
   // ── Logout ─────────────────────────────────────────────────────────────────
   const logout = async () => {
-    if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut();
+    try {
+      if (isSupabaseConfigured && supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (err) {
+      console.warn('[AuthContext] Error during signOut:', err);
+    } finally {
+      localStorage.removeItem('yamaha_current_user');
+      setUser(null);
+      setSession(null);
     }
-    localStorage.removeItem('yamaha_current_user');
-    setUser(null);
-    setSession(null);
   };
 
   const openAuthModal = (mode = 'signin', redirectTo = null) => {
@@ -577,6 +625,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         user,
+        profile: user,
         session,
         loading,
         loginWithPhonePassword,
