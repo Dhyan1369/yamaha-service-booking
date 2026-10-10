@@ -76,6 +76,9 @@ const mapBookingFromDb = (row) => {
     date: row.date,
     userId: row.user_id ?? row.userId,
     createdAt: row.created_at ?? row.createdAt,
+    isWalkIn: Boolean(row.is_walk_in || row.nic?.toLowerCase() === 'walk-in' || row.isWalkIn),
+    createdBy: row.created_by || null,
+    customerNotes: row.customer_notes || '',
     profile: profile
       ? {
           fullName: profile.full_name,
@@ -238,7 +241,10 @@ export const bookingService = {
         serviceType: bookingData.serviceType,
         status: 'Pending',
         date: bookingData.date,
-        userId: bookingData.userId || 'guest',
+        userId: bookingData.userId || null,
+        isWalkIn: Boolean(bookingData.isWalkIn),
+        createdBy: bookingData.createdBy || null,
+        customerNotes: bookingData.customerNotes ? String(bookingData.customerNotes).trim() : '',
         createdAt: new Date().toISOString()
       };
 
@@ -256,22 +262,36 @@ export const bookingService = {
 
     const rpcParams = {
       p_date: bookingData.date,
-      p_name: bookingData.name,
+      p_booking_date: bookingData.date,
+      p_name: (bookingData.name || '').trim(),
+      p_customer_name: (bookingData.name || '').trim(),
       p_phone: cleanPhone,
-      p_nic: bookingData.nic,
-      p_bike_model: bookingData.bikeModel,
-      p_vehicle_no: bookingData.vehicleNo,
+      p_nic: bookingData.nic ? bookingData.nic.trim().toUpperCase() : 'N/A',
+      p_bike_model: (bookingData.bikeModel || '').trim(),
+      p_vehicle_no: (bookingData.vehicleNo || '').trim().toUpperCase(),
       p_service_type: bookingData.serviceType,
-      p_user_id: bookingData.userId,
-      p_mileage: bookingData.mileage ? String(bookingData.mileage).trim() : null
+      p_user_id: bookingData.userId || null,
+      p_mileage: bookingData.mileage ? String(bookingData.mileage).trim() : null,
+      p_customer_notes: bookingData.customerNotes ? String(bookingData.customerNotes).trim() : null,
+      p_is_walk_in: Boolean(bookingData.isWalkIn),
+      p_created_by: bookingData.createdBy || null
     };
 
     let { data: rpcData, error: rpcError } = await supabase.rpc('create_booking_transaction', rpcParams);
 
-    // Fallback if database RPC has not yet been updated with p_mileage parameter
+    // Fallback if database RPC has not yet been updated with newer parameters
     if (rpcError && (rpcError.message?.includes('Could not find') || rpcError.code === 'PGRST202')) {
-      const fallbackParams = { ...rpcParams };
-      delete fallbackParams.p_mileage;
+      const fallbackParams = {
+        p_date: bookingData.date,
+        p_name: (bookingData.name || '').trim(),
+        p_phone: cleanPhone,
+        p_nic: bookingData.nic ? bookingData.nic.trim().toUpperCase() : 'N/A',
+        p_bike_model: (bookingData.bikeModel || '').trim(),
+        p_vehicle_no: (bookingData.vehicleNo || '').trim().toUpperCase(),
+        p_service_type: bookingData.serviceType,
+        p_user_id: bookingData.userId || null,
+        p_mileage: bookingData.mileage ? String(bookingData.mileage).trim() : null
+      };
       const fallbackRes = await supabase.rpc('create_booking_transaction', fallbackParams);
       rpcData = fallbackRes.data;
       rpcError = fallbackRes.error;
@@ -368,6 +388,104 @@ export const bookingService = {
     }
 
     return this.updateBookingStatus(id, 'Cancelled');
+  },
+
+  /**
+   * Smart customer lookup by 10-digit Sri Lankan phone number.
+   * Checks public.profiles (registered customers) first, then fallback to past bookings.
+   */
+  async findCustomerByPhone(phone) {
+    if (!phone) return null;
+    let cleanPhone = String(phone).trim().replace(/[\s-]/g, '');
+    if (cleanPhone.startsWith('+94')) {
+      cleanPhone = '0' + cleanPhone.slice(3);
+    } else if (cleanPhone.startsWith('94') && cleanPhone.length === 11) {
+      cleanPhone = '0' + cleanPhone.slice(2);
+    }
+
+    if (cleanPhone.length !== 10 || !cleanPhone.startsWith('0')) return null;
+
+    if (!isSupabaseConfigured || !supabase) {
+      const localBookings = JSON.parse(localStorage.getItem('yamaha_local_bookings') || '[]');
+      const past = localBookings
+        .filter((b) => b.phone === cleanPhone)
+        .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      if (!past) return null;
+      return {
+        source: 'past_booking',
+        userId: past.userId && past.userId !== 'guest' ? past.userId : null,
+        customerName: past.name,
+        phone: cleanPhone,
+        bikeModel: past.bikeModel,
+        vehicleNo: past.vehicleNo,
+        vehicles: []
+      };
+    }
+
+    try {
+      // 1. Look up registered profiles first
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, nic, default_bike_model, default_vehicle_plate')
+        .eq('phone', cleanPhone)
+        .maybeSingle();
+
+      if (!profileErr && profile) {
+        let vehicles = [];
+        try {
+          const { data: vehData } = await supabase
+            .from('vehicles')
+            .select('id, bike_model, vehicle_plate, is_default')
+            .eq('user_id', profile.id)
+            .order('is_default', { ascending: false });
+          if (vehData) vehicles = vehData;
+        } catch {
+          // vehicles table optional
+        }
+
+        return {
+          source: 'registered_profile',
+          userId: profile.id,
+          customerName: profile.full_name || '',
+          phone: cleanPhone,
+          nic: profile.nic || '',
+          bikeModel: profile.default_bike_model || '',
+          vehicleNo: profile.default_vehicle_plate || '',
+          vehicles: vehicles.map((v) => ({
+            id: v.id,
+            bikeModel: v.bike_model,
+            vehiclePlate: v.vehicle_plate,
+            isDefault: Boolean(v.is_default)
+          }))
+        };
+      }
+
+      // 2. Fallback to historical bookings for returning walk-in customers
+      const { data: pastBooking, error: bkErr } = await supabase
+        .from('bookings')
+        .select('name, phone, nic, bike_model, vehicle_no, user_id')
+        .eq('phone', cleanPhone)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!bkErr && pastBooking) {
+        return {
+          source: pastBooking.user_id ? 'registered_booking' : 'past_walk_in',
+          userId: pastBooking.user_id || null,
+          customerName: pastBooking.name || '',
+          phone: cleanPhone,
+          nic: pastBooking.nic || '',
+          bikeModel: pastBooking.bike_model || '',
+          vehicleNo: pastBooking.vehicle_no || '',
+          vehicles: []
+        };
+      }
+    } catch (err) {
+      console.warn('[bookingService.findCustomerByPhone] Lookup error:', err);
+    }
+
+    return null;
   }
 };
 
