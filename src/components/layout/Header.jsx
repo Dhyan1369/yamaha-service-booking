@@ -1,71 +1,113 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Bike, LogOut, Menu, Shield, User } from 'lucide-react';
-import Button from '../common/Button';
+import { Bike, LogOut, Menu, Shield } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../../context/LanguageContext';
 
 export default function Header({ onOpenSidebar }) {
-  const { user, logout, openAuthModal } = useAuth();
+  const { user, loading, logout } = useAuth();
   const { lang, setLang, t } = useLanguage();
   const location = useLocation();
 
+  const isAdmin = Boolean(user?.isAdmin || user?.role === 'admin');
+
   const navLinks = [
     { name: t('nav.home'), path: '/' },
-    ...(user && !user.isAdmin ? [{ name: t('nav.myDashboard'), path: '/dashboard' }] : []),
-    ...(user?.isAdmin ? [{ name: t('nav.adminDashboard'), path: '/admin' }] : []),
+    ...(!isAdmin ? [{ name: t('nav.bookService'), path: '/booking' }] : []),
+    ...(isAdmin ? [{ name: t('nav.adminDashboard'), path: '/admin' }] : []),
+    ...(user && !isAdmin ? [{ name: t('nav.myDashboard'), path: '/dashboard' }] : []),
+    { name: t('nav.about'), path: '/about' },
+    { name: t('nav.contact'), path: '/contact' },
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-        {/* Brand */}
-        <Link to="/" className="flex items-center space-x-3 group">
-          <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/30 flex items-center justify-center group-hover:scale-105 transition">
-            <Bike className="w-7 h-7 text-white" />
+    <header
+      className="sticky top-0 z-40 transition-all duration-300"
+      style={{
+        background: 'rgba(8, 12, 24, 0.85)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        boxShadow: '0 1px 30px rgba(0,0,0,0.5)',
+      }}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-18 flex items-center justify-between gap-3">
+        {/* Brand / Logo */}
+        <Link to="/" className="flex items-center space-x-3 group shrink-0">
+          <div
+            className="relative p-2 rounded-xl text-white transition-all duration-300 group-hover:scale-105"
+            style={{
+              background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+              boxShadow: '0 4px 16px rgba(37, 99, 235, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
+            }}
+          >
+            <Bike className="w-5 h-5 sm:w-5 sm:h-5" />
           </div>
           <div>
-            <span className="text-xl font-black tracking-wider text-white flex items-center gap-1.5">
-              MANJU <span className="text-red-500">YAMAHA</span> SERVICE
+            <span
+              className="text-sm sm:text-base font-black tracking-wider flex items-center gap-1 leading-tight"
+              style={{ color: '#ffffff' }}
+            >
+              MANJU <span style={{ color: '#ef4444' }}>YAMAHA</span>
             </span>
-            <p className="text-xs text-slate-400 font-medium">
-              {lang === 'si' ? 'කඹුරුපිටිය සේවා මධ්‍යස්ථානය' : 'Kamburupitiya Service Center'}
+            <p className="hidden sm:block text-[10px] font-medium leading-none mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              {lang === 'si' ? 'කඹුරුපිටිය සේවා මධ්‍යස්ථානය' : 'Kamburupitiya Authorized Service'}
             </p>
           </div>
         </Link>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-1">
+        {/* Desktop Navigation (≥ 768px) */}
+        <nav className="hidden md:flex items-center gap-0.5">
           {navLinks.map((link) => {
             const isActive = location.pathname === link.path;
             return (
               <Link
                 key={link.path}
                 to={link.path}
-                className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition ${
+                className={`relative px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    ? 'text-white'
+                    : 'text-body hover:text-white'
                 }`}
+                style={isActive ? {
+                  background: 'rgba(37, 99, 235, 0.15)',
+                  color: '#93c5fd',
+                } : {}}
               >
                 {link.name}
+                {isActive && (
+                  <span
+                    className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
+                    style={{ background: '#3b82f6' }}
+                  />
+                )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Right Corner: Language Toggle & User Actions */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
-          {/* Language Toggle Pill: EN | සිං */}
-          <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-bold shadow-inner">
+        {/* Right Corner Controls */}
+        <div className="flex items-center gap-2">
+          {/* Language Toggle */}
+          <div
+            className="h-8 flex items-center p-0.5 rounded-lg text-xs font-semibold gap-0.5"
+            style={{
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
             <button
               type="button"
               onClick={() => setLang('en')}
               title="English"
-              className={`px-2.5 py-1 rounded-lg transition-all ${
+              className={`h-7 px-2.5 rounded-md text-xs transition-all duration-200 ${
                 lang === 'en'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-extrabold'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'text-white font-bold'
+                  : 'text-mutedText hover:text-white'
               }`}
+              style={lang === 'en' ? {
+                background: 'rgba(37, 99, 235, 0.6)',
+                boxShadow: '0 1px 6px rgba(37, 99, 235, 0.4)',
+              } : {}}
             >
               EN
             </button>
@@ -73,77 +115,119 @@ export default function Header({ onOpenSidebar }) {
               type="button"
               onClick={() => setLang('si')}
               title="සිංහල"
-              className={`px-2.5 py-1 rounded-lg transition-all ${
+              className={`h-7 px-2.5 rounded-md text-xs transition-all duration-200 ${
                 lang === 'si'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-extrabold'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'text-white font-bold'
+                  : 'text-mutedText hover:text-white'
               }`}
+              style={lang === 'si' ? {
+                background: 'rgba(37, 99, 235, 0.6)',
+                boxShadow: '0 1px 6px rgba(37, 99, 235, 0.4)',
+              } : {}}
             >
               සිං
             </button>
           </div>
 
+          {/* Desktop User Badge & Logout */}
           {user ? (
-            <div className="flex items-center space-x-2 sm:space-x-2.5">
-              {/* User badge with avatar, name, and edit link */}
+            <div className="hidden md:flex items-center gap-2">
               <Link
                 to="/profile"
                 title={t('profile.viewProfile')}
-                className={`flex items-center gap-2.5 bg-slate-800/70 hover:bg-slate-800 border rounded-xl px-2.5 sm:px-3 py-1.5 transition group ${
-                  location.pathname === '/profile'
-                    ? 'border-blue-500 shadow-md shadow-blue-500/20'
-                    : 'border-slate-700/60 hover:border-slate-600'
-                }`}
+                className="h-8 flex items-center gap-2 px-2.5 rounded-lg transition-all duration-200"
+                style={{
+                  background: location.pathname === '/profile'
+                    ? 'rgba(37, 99, 235, 0.2)'
+                    : 'rgba(255,255,255,0.05)',
+                  border: location.pathname === '/profile'
+                    ? '1px solid rgba(37, 99, 235, 0.4)'
+                    : '1px solid rgba(255,255,255,0.08)',
+                }}
               >
-                <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 overflow-hidden">
+                <div
+                  className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 overflow-hidden font-bold text-[10px] text-white"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(37,99,235,0.8), rgba(37,99,235,0.5))',
+                    border: '1px solid rgba(37,99,235,0.4)',
+                  }}
+                >
                   {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                   ) : (
-                    <User className="w-4 h-4" />
+                    (user.name || 'U').charAt(0).toUpperCase()
                   )}
                 </div>
-                <div className="hidden sm:block text-right">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <p className="text-sm font-semibold text-white leading-tight group-hover:text-blue-300 transition">
-                      {user.name}
-                    </p>
-                    {user.isAdmin && (
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 flex items-center gap-0.5">
-                        <Shield className="w-2.5 h-2.5" /> {t('common.admin').toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5">{user.phone}</p>
-                </div>
+                <span className="text-xs font-semibold text-white truncate max-w-[90px]">
+                  {user.name}
+                </span>
+                {user.isAdmin && (
+                  <span
+                    className="h-5 px-1.5 rounded text-[10px] font-bold flex items-center gap-0.5"
+                    style={{
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      color: '#fbbf24',
+                      border: '1px solid rgba(245,158,11,0.25)',
+                    }}
+                  >
+                    <Shield className="w-2.5 h-2.5" />
+                    {t('common.admin').toUpperCase()}
+                  </span>
+                )}
               </Link>
 
-              {/* Logout Button */}
               <button
                 type="button"
                 onClick={logout}
                 title={t('nav.logout')}
-                className="p-1.5 sm:p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-xl transition border border-transparent hover:border-red-500/30"
+                className="h-8 w-8 rounded-lg flex items-center justify-center transition-all duration-200"
+                style={{
+                  border: '1px solid rgba(255,255,255,0.07)',
+                  background: 'rgba(255,255,255,0.04)',
+                  color: 'var(--text-muted)',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(220,38,38,0.15)';
+                  e.currentTarget.style.color = '#ef4444';
+                  e.currentTarget.style.borderColor = 'rgba(220,38,38,0.3)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  e.currentTarget.style.color = 'var(--text-muted)';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)';
+                }}
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
               </button>
             </div>
+          ) : loading ? (
+            <div className="hidden md:inline-flex h-8 w-20 rounded-lg animate-pulse bg-white/5 border border-white/10" />
           ) : (
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => openAuthModal('signin')}
-              className="hidden sm:inline-flex"
+            <Link
+              to="/login"
+              className="hidden md:inline-flex h-8 px-4 rounded-lg text-white font-semibold text-xs items-center justify-center transition-all duration-200"
+              style={{
+                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                boxShadow: '0 2px 12px rgba(37, 99, 235, 0.35)',
+                border: '1px solid rgba(37,99,235,0.5)',
+              }}
             >
               {t('nav.login')}
-            </Button>
+            </Link>
           )}
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Hamburger Button */}
           <button
+            type="button"
             onClick={onOpenSidebar}
-            className="md:hidden p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+            aria-label="Open mobile menu"
+            className="md:hidden min-w-[44px] min-h-[44px] h-10 w-10 flex items-center justify-center text-white rounded-xl transition-all duration-200"
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.1)',
+            }}
           >
-            <Menu className="w-6 h-6" />
+            <Menu className="w-5 h-5" />
           </button>
         </div>
       </div>

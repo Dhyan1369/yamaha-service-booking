@@ -21,7 +21,7 @@ const YAMAHA_MODELS = [
 export default function Register() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, signUpWithPhonePassword } = useAuth();
+  const { user, loading: authLoading, signUpWithPhonePassword } = useAuth();
   const { lang, t } = useLanguage();
 
   const [form, setForm] = useState({
@@ -40,6 +40,14 @@ export default function Register() {
   const [fieldErrors, setFieldErrors] = useState({});
 
   const redirectTo = location.state?.from?.pathname || location.state?.redirectTo || '/dashboard';
+
+  if (authLoading) {
+    return (
+      <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
 
   if (user) {
     return (

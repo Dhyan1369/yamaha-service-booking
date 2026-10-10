@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   User,
@@ -126,7 +126,7 @@ function InfoCard({ icon: Icon, label, value, mono = false, required = false }) 
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, updateCustomerProfile } = useAuth();
+  const { user, loading, updateCustomerProfile } = useAuth();
   const { getUserBookings } = useBookings();
   const { vehicles, addVehicle, deleteVehicle, setDefaultVehicle } = useVehicles();
   const { t } = useLanguage();
@@ -142,6 +142,18 @@ export default function Profile() {
   const [bikeModel, setBikeModel] = useState(user?.bikeModel || user?.defaultBikeModel || 'Yamaha FZ-S V3');
   const [vehiclePlate, setVehiclePlate] = useState(user?.vehiclePlate || user?.defaultVehiclePlate || '');
   const [newPassword, setNewPassword] = useState('');
+
+  // Keep form fields synced if user profile loads or updates in background
+  useEffect(() => {
+    if (user && !isEditing) {
+      setName(user.name || '');
+      setPhone(user.phone || '');
+      setNic(user.nic || '');
+      setEmail(user.email || '');
+      setBikeModel(user.bikeModel || user.defaultBikeModel || 'Yamaha FZ-S V3');
+      setVehiclePlate(user.vehiclePlate || user.defaultVehiclePlate || '');
+    }
+  }, [user, isEditing]);
 
   // ── My Garage state ──────────────────────────────────────────────────────
   const [showAddBikeModal, setShowAddBikeModal] = useState(false);
@@ -206,7 +218,18 @@ export default function Profile() {
     }
   };
 
-  // ── Not logged in guard ──────────────────────────────────────────────────
+  // ── Session loading / not logged in guard ──────────────────────────────────
+  if (loading && !user) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+          <p className="text-xs text-slate-400">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="max-w-md mx-auto px-4 py-20 text-center">

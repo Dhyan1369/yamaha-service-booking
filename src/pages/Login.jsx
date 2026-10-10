@@ -10,7 +10,7 @@ import { validatePassword } from '../lib/validation';
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loginWithPhonePassword } = useAuth();
+  const { user, loading: authLoading, loginWithPhonePassword } = useAuth();
   const { lang, t } = useLanguage();
 
   const [loginInput, setLoginInput] = useState('');
@@ -19,6 +19,14 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState('');
 
   const redirectTo = location.state?.from?.pathname || location.state?.redirectTo || (user?.isAdmin ? '/admin' : '/dashboard');
+
+  if (authLoading) {
+    return (
+      <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
 
   if (user) {
     return (
