@@ -16,32 +16,29 @@ async function hashPassword(plain) {
 export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  // Synchronously hydrate initial user from localStorage to eliminate Auth Flash / Session Hydration lag
   const [user, setUser] = useState(() => {
-    if (!isSupabaseConfigured) {
-      try {
-        const stored = localStorage.getItem('yamaha_current_user');
-        return stored ? JSON.parse(stored) : null;
-      } catch {
-        return null;
-      }
+    try {
+      const stored = localStorage.getItem('yamaha_current_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
     }
-    return null;
   });
 
   const [session, setSession] = useState(() => {
-    if (!isSupabaseConfigured) {
-      try {
-        const stored = localStorage.getItem('yamaha_current_user');
-        return stored ? { user: JSON.parse(stored) } : null;
-      } catch {
-        return null;
-      }
+    try {
+      const stored = localStorage.getItem('yamaha_current_user');
+      return stored ? { user: JSON.parse(stored) } : null;
+    } catch {
+      return null;
     }
-    return null;
   });
 
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState('signin');
+  const [authRedirectPath, setAuthRedirectPath] = useState(null);
 
   // Convert a phone number to a virtual Supabase-compatible email (always using 0XXXXXXXXX format, no +94)
   const phoneToAuthEmail = (phone) => {
@@ -54,12 +51,33 @@ export function AuthProvider({ children }) {
     return `${clean}@phone.yamaha.lk`;
   };
 
-  const formatUser = (sbUser, customMeta = {}) => {
+  // Fetch user profile from public.profiles
+  const fetchProfile = async (userId) => {
+    if (!isSupabaseConfigured || !supabase || !userId) return null;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[AuthContext] Notice: failed to load public.profiles:', error.message);
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.warn('[AuthContext] Error fetching public.profiles:', err);
+      return null;
+    }
+  };
+
+  const formatUser = (sbUser, profile = null, customMeta = {}) => {
     if (!sbUser) return null;
 
     // Supabase stores extra fields inside user_metadata.
+    // public.profiles holds the canonical relational profile data.
     // Offline (localStorage) users are flat objects with the fields at the top level.
-    // We merge both sources so the code below works for either shape.
     const meta = {
       ...(sbUser.user_metadata || {}), // Supabase path
       // Offline path: pick top-level fields that Supabase would put in user_metadata
@@ -67,6 +85,7 @@ export function AuthProvider({ children }) {
       ...(sbUser.nic       ? { nic:       sbUser.nic }       : {}),
       ...(sbUser.name      ? { name:      sbUser.name }      : {}),
       ...(sbUser.bikeModel ? { bikeModel: sbUser.bikeModel } : {}),
+      ...(sbUser.vehicleNo ? { vehicleNo: sbUser.vehicleNo } : {}),
       ...(sbUser.email     ? { email:     sbUser.email }     : {}),
       ...customMeta,
     };
@@ -82,7 +101,7 @@ export function AuthProvider({ children }) {
         ? rawEmail.replace('@phone.yamaha.lk', '')
         : '';
 
-    let rawPhone = (meta.phone || phoneFromEmail || sbUser.phone || '').replace(/[\s-]/g, '');
+    let rawPhone = (profile?.phone || meta.phone || phoneFromEmail || sbUser.phone || '').replace(/[\s-]/g, '');
     // Ensure 0-prefixed 10-digit format without +94 across the entire system
     if (rawPhone.startsWith('+94')) {
       rawPhone = '0' + rawPhone.slice(3);
@@ -90,48 +109,138 @@ export function AuthProvider({ children }) {
       rawPhone = '0' + rawPhone.slice(2);
     }
 
-    // ── SECURITY: Admin status is determined ONLY from server-controlled
-    // app_metadata (set via Supabase dashboard / Edge Function, never by the
-    // client). user_metadata is user-writable and must NOT be trusted for
-    // privilege checks.
-    const isAdmin = appMeta.role === 'admin';
+    // Role priority: canonical public.profiles table -> server app_metadata -> default 'customer'
+    const userRole = profile?.role || appMeta.role || sbUser.role || (sbUser.isAdmin ? 'admin' : 'customer');
+    const isAdmin = userRole === 'admin' || appMeta.role === 'admin';
 
-    // Offline dev-only fallback: the local user object may have isAdmin set
-    // explicitly by the development seed — but ONLY when Supabase is not
-    // configured so this code path can never run in production.
+    // Offline dev-only fallback:
     const isAdminLocal = !isSupabaseConfigured && (sbUser.isAdmin === true || customMeta.isAdmin === true);
     const effectiveAdmin = isAdmin || isAdminLocal;
+    const effectiveRole = effectiveAdmin ? 'admin' : 'customer';
+
+    const bikeModel =
+      profile?.default_bike_model ||
+      meta.bikeModel ||
+      meta.bike_model ||
+      meta.default_bike_model ||
+      'Yamaha Bike';
+
+    const vehiclePlate =
+      profile?.default_vehicle_plate ||
+      meta.vehicleNo ||
+      meta.vehicle_no ||
+      meta.default_vehicle_plate ||
+      '';
+
+    const fullName =
+      profile?.full_name ||
+      meta.full_name ||
+      meta.name ||
+      (effectiveAdmin ? 'Admin Manager' : rawPhone || 'Customer');
+
+    const nic = profile?.nic || meta.nic || '';
+    const isActive = profile?.is_active !== undefined
+      ? Boolean(profile.is_active)
+      : (meta.isActive !== undefined ? Boolean(meta.isActive) : true);
 
     return {
       id: sbUser.id || 'usr_' + (rawPhone || 'guest'),
       email: displayEmail,
-      name: meta.full_name || meta.name || (effectiveAdmin ? 'Admin Manager' : rawPhone || 'Customer'),
-      nic:  meta.nic || '',
+      name: fullName,
       phone: rawPhone,          // always formatted exactly as user entered (e.g. 0760755111, no +94)
-      bikeModel: meta.bikeModel || meta.bike_model || 'Yamaha Bike',
+      nic:  nic,
+      role: effectiveRole,
+      bikeModel: bikeModel,
+      defaultBikeModel: bikeModel,
+      vehiclePlate: vehiclePlate,
+      defaultVehiclePlate: vehiclePlate,
       avatarUrl: meta.avatarUrl || meta.avatar_url || sbUser.avatarUrl || sbUser.avatar_url || '',
       isAdmin: Boolean(effectiveAdmin),
-      rawUser: sbUser
+      isActive: isActive,
+      is_active: isActive,
+      adminNotes: profile?.admin_notes || meta.adminNotes || '',
+      rawUser: sbUser,
+      profile: profile || null
     };
   };
 
   useEffect(() => {
     if (isSupabaseConfigured && supabase) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        setSession(session);
-        setUser(formatUser(session?.user));
-        setLoading(false);
-      });
+      let isMounted = true;
+
+      const initSession = async () => {
+        try {
+          const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+          if (!isMounted) return;
+          if (error) {
+            console.warn('[AuthContext] Error retrieving session:', error.message);
+          }
+          setSession(initialSession);
+          if (initialSession?.user) {
+            const profile = await fetchProfile(initialSession.user.id);
+            if (isMounted) {
+              const formatted = formatUser(initialSession.user, profile);
+              setUser(formatted);
+              if (formatted) {
+                try {
+                  localStorage.setItem('yamaha_current_user', JSON.stringify(formatted));
+                } catch (e) {
+                  console.warn('[AuthContext] Failed to cache user profile:', e);
+                }
+              }
+            }
+          } else {
+            // No active Supabase session — clear any stale cached session
+            if (isMounted) {
+              setUser(null);
+              localStorage.removeItem('yamaha_current_user');
+            }
+          }
+        } catch (err) {
+          console.warn('[AuthContext] Session initialization exception:', err);
+        } finally {
+          if (isMounted) setLoading(false);
+        }
+      };
+
+      initSession();
 
       const {
         data: { subscription }
-      } = supabase.auth.onAuthStateChange((_event, session) => {
-        setSession(session);
-        setUser(formatUser(session?.user));
-        setLoading(false);
+      } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+        if (!isMounted) return;
+
+        if (event === 'SIGNED_OUT' || !newSession) {
+          setSession(null);
+          setUser(null);
+          localStorage.removeItem('yamaha_current_user');
+          if (isMounted) setLoading(false);
+          return;
+        }
+
+        setSession(newSession);
+
+        if (newSession?.user) {
+          const profile = await fetchProfile(newSession.user.id);
+          if (isMounted) {
+            const formatted = formatUser(newSession.user, profile);
+            setUser(formatted);
+            if (formatted) {
+              try {
+                localStorage.setItem('yamaha_current_user', JSON.stringify(formatted));
+              } catch (e) {
+                console.warn('[AuthContext] Failed to cache user profile:', e);
+              }
+            }
+          }
+        }
+        if (isMounted) setLoading(false);
       });
 
-      return () => subscription.unsubscribe();
+      return () => {
+        isMounted = false;
+        subscription.unsubscribe();
+      };
     }
   }, []);
 
@@ -392,14 +501,52 @@ export function AuthProvider({ children }) {
       // Prevent Base64 strings from bloating JWT auth headers (causes HTTP 431)
       const safeAvatarUrl = typeof rawAvatar === 'string' && rawAvatar.startsWith('http') ? rawAvatar : '';
 
+      const resolvedName = profileData.name ?? profileData.full_name ?? user.name;
+      const resolvedBike = profileData.bikeModel ?? profileData.default_bike_model ?? user.bikeModel;
+      const resolvedPlate = profileData.vehiclePlate ?? profileData.default_vehicle_plate ?? profileData.vehicleNo ?? user.vehiclePlate;
+      const resolvedNic = profileData.nic !== undefined ? (profileData.nic ? profileData.nic.trim().toUpperCase() : '') : user.nic;
+      const resolvedPhone = cleanPhone || profileData.phone || user.phone;
+
+      // 1. Persist directly to canonical public.profiles table
+      let updatedProfile = null;
+      try {
+        const profilePayload = {
+          id: user.id,
+          full_name: resolvedName,
+          phone: resolvedPhone,
+          nic: resolvedNic,
+          default_bike_model: resolvedBike,
+          default_vehicle_plate: resolvedPlate ? resolvedPlate.trim().toUpperCase() : '',
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: profData, error: profError } = await supabase
+          .from('profiles')
+          .upsert(profilePayload)
+          .select()
+          .single();
+
+        if (profError) {
+          console.warn('[AuthContext] Notice: could not upsert public.profiles:', profError.message);
+        } else {
+          updatedProfile = profData;
+        }
+      } catch (e) {
+        console.warn('[AuthContext] Exception while upserting public.profiles:', e);
+      }
+
+      // 2. Sync auth user metadata
       const updatePayload = {
         data: {
-          name: profileData.name,
-          full_name: profileData.name,
-          phone: cleanPhone || profileData.phone,
-          nic: profileData.nic,
-          bikeModel: profileData.bikeModel,
-          email: profileData.email || '',
+          name: resolvedName,
+          full_name: resolvedName,
+          phone: resolvedPhone,
+          nic: resolvedNic,
+          bikeModel: resolvedBike,
+          default_bike_model: resolvedBike,
+          vehicleNo: resolvedPlate,
+          default_vehicle_plate: resolvedPlate,
+          email: profileData.email || user.email || '',
           avatarUrl: safeAvatarUrl,
           avatar_url: safeAvatarUrl
         }
@@ -407,18 +554,26 @@ export function AuthProvider({ children }) {
       if (profileData.password) {
         updatePayload.password = profileData.password;
       }
+
       const { data, error } = await supabase.auth.updateUser(updatePayload);
       if (error) throw error;
-      const formatted = formatUser(data.user);
+
+      const formatted = formatUser(data.user, updatedProfile || user.profile);
       if (rawAvatar && rawAvatar.startsWith('data:')) {
         formatted.avatarUrl = rawAvatar;
       }
       setUser(formatted);
+      try {
+        localStorage.setItem('yamaha_current_user', JSON.stringify(formatted));
+      } catch (e) {
+        console.warn('[AuthContext] Failed to cache user on profile update:', e);
+      }
       return formatted;
     } else if (user) {
       const updatedUser = { 
         ...user, 
         ...profileData, 
+        role: user.role || (user.isAdmin ? 'admin' : 'customer'),
         isAdmin: Boolean(user.isAdmin) 
       };
       localStorage.setItem('yamaha_current_user', JSON.stringify(updatedUser));
@@ -428,6 +583,7 @@ export function AuthProvider({ children }) {
         localUsers[index] = { 
           ...localUsers[index], 
           ...profileData, 
+          role: localUsers[index].role || (localUsers[index].isAdmin ? 'admin' : 'customer'),
           isAdmin: Boolean(localUsers[index].isAdmin) 
         };
         localStorage.setItem('yamaha_local_users', JSON.stringify(localUsers));
@@ -439,21 +595,37 @@ export function AuthProvider({ children }) {
 
   // ── Logout ─────────────────────────────────────────────────────────────────
   const logout = async () => {
-    if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut();
+    try {
+      if (isSupabaseConfigured && supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (err) {
+      console.warn('[AuthContext] Error during signOut:', err);
+    } finally {
+      localStorage.removeItem('yamaha_current_user');
+      setUser(null);
+      setSession(null);
     }
-    localStorage.removeItem('yamaha_current_user');
-    setUser(null);
-    setSession(null);
   };
 
-  const openAuthModal  = () => setShowAuthModal(true);
-  const closeAuthModal = () => setShowAuthModal(false);
+  const openAuthModal = (mode = 'signin', redirectTo = null) => {
+    const validMode = (typeof mode === 'string' && (mode === 'signup' || mode === 'forgot')) ? mode : 'signin';
+    const validRedirect = typeof redirectTo === 'string' ? redirectTo : null;
+    setAuthModalMode(validMode);
+    setAuthRedirectPath(validRedirect);
+    setShowAuthModal(true);
+  };
+
+  const closeAuthModal = () => {
+    setShowAuthModal(false);
+    setAuthRedirectPath(null);
+  };
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        profile: user,
         session,
         loading,
         loginWithPhonePassword,
@@ -465,6 +637,8 @@ export function AuthProvider({ children }) {
         updateCustomerProfile,
         logout,
         showAuthModal,
+        authModalMode,
+        authRedirectPath,
         openAuthModal,
         closeAuthModal
       }}

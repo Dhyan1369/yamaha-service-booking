@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Lock, Clock } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Lock, Clock, Check } from 'lucide-react';
 import { POYA_DATES, HOLIDAY_DATES, toDateKey } from '../../services/bookingService';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -98,33 +98,79 @@ export default function SlotSelector({
     return { isClosed: false, isPast: false, isSameDay: false, reason: '' };
   };
 
+  const formatWeekdayName = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        return d.toLocaleDateString(lang === 'si' ? 'si-LK' : 'en-US', { weekday: 'short' });
+      }
+    } catch {
+      return '';
+    }
+    return '';
+  };
+
   const dayHeaders = t('booking.days') || ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+  const weekdayLabel = formatWeekdayName(selectedDate);
 
   return (
     <div className="w-full">
       {displayLabel && (
-        <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-          {displayLabel} <span className="text-red-400">*</span>
+        <label className="block text-xs font-semibold text-subText mb-1.5">
+          {displayLabel} <span className="text-red-500">*</span>
         </label>
       )}
-      <div className="relative">
+      <div className={`relative ${calendarOpen ? 'z-40' : 'z-10'}`}>
         <button
           type="button"
           disabled={disabled}
           onClick={() => setCalendarOpen(!calendarOpen)}
-          className="w-full flex items-center justify-between bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white text-sm outline-none transition focus:border-blue-500 disabled:opacity-50"
+          className="w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-sm outline-none transition disabled:opacity-50"
+          style={{
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: calendarOpen ? '1px solid rgba(37, 99, 235, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+            boxShadow: calendarOpen ? '0 0 0 3px rgba(37, 99, 235, 0.15)' : 'none',
+            color: 'var(--text-heading)',
+          }}
         >
-          <span className="font-mono">{selectedDate}</span>
-          <Calendar className="w-4 h-4 text-white" />
+          <div className="flex items-center gap-2.5">
+            <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
+            <span className="font-mono font-bold text-white">{selectedDate}</span>
+            {weekdayLabel && (
+              <span
+                className="text-[11px] font-semibold px-2 py-0.5 rounded-md"
+                style={{
+                  background: 'rgba(37, 99, 235, 0.12)',
+                  color: '#93c5fd',
+                  border: '1px solid rgba(37, 99, 235, 0.25)',
+                }}
+              >
+                {weekdayLabel}
+              </span>
+            )}
+          </div>
+          <span className="text-xs font-semibold text-blue-400">
+            {calendarOpen ? (lang === 'si' ? 'වසන්න' : 'Close') : (lang === 'si' ? 'වෙනස් කරන්න' : 'Change')}
+          </span>
         </button>
 
         {calendarOpen && (
-          <div className={inline 
-            ? "mt-3 bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl relative" 
-            : "absolute z-30 top-full mt-2 left-0 right-0 bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl"
-          }>
+          <div
+            className={inline 
+              ? "mt-3 rounded-2xl p-4 sm:p-5 relative" 
+              : "absolute z-50 top-full mt-2 left-0 right-0 rounded-2xl p-4 sm:p-5"
+            }
+            style={{
+              background: 'linear-gradient(150deg, #0d1629 0%, #070b16 100%)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(37, 99, 235, 0.2)',
+              color: 'var(--text-heading)',
+            }}
+          >
             {/* Month Navigation */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3.5 max-w-[340px] sm:max-w-[360px] mx-auto">
               <button
                 type="button"
                 aria-label="Previous month"
@@ -136,11 +182,12 @@ export default function SlotSelector({
                     );
                   }
                 }}
-                className={`p-1.5 rounded-lg transition ${
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition ${
                   canGoPrevMonth
-                    ? 'text-slate-300 hover:bg-slate-800'
-                    : 'text-slate-700 cursor-not-allowed opacity-40'
+                    ? 'text-body hover:text-white hover:bg-white/10'
+                    : 'text-white/20 cursor-not-allowed'
                 }`}
+                style={{ border: '1px solid rgba(255,255,255,0.06)' }}
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -157,25 +204,26 @@ export default function SlotSelector({
                     new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1)
                   )
                 }
-                className="p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition"
+                className="w-8 h-8 flex items-center justify-center text-body hover:text-white hover:bg-white/10 rounded-lg transition"
+                style={{ border: '1px solid rgba(255,255,255,0.06)' }}
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
 
             {/* Day-of-Week Headers */}
-            <div className="grid grid-cols-7 text-center text-[10px] text-slate-500 font-semibold mb-2">
+            <div className="grid grid-cols-7 text-center text-[11px] font-semibold mb-2 max-w-[340px] sm:max-w-[360px] mx-auto">
               {dayHeaders.map((day, idx) => (
-                <span key={`${day}-${idx}`} className={idx === 0 ? 'text-red-400 font-bold' : ''}>
+                <span key={`${day}-${idx}`} className={idx === 0 ? 'text-red-400 font-bold' : 'text-slate-400'}>
                   {day}
                 </span>
               ))}
             </div>
 
-            {/* Days Grid */}
-            <div className="grid grid-cols-7 gap-1">
+            {/* Days Grid with Compact Number Boxes */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 max-w-[340px] sm:max-w-[360px] mx-auto">
               {getCalendarDays().map((date, index) => {
-                if (!date) return <span key={`empty-${index}`} />;
+                if (!date) return <span key={`empty-${index}`} className="h-9 w-9 sm:h-10 sm:w-10 mx-auto" />;
 
                 const dateKey = toDateKey(date);
                 const { isClosed, isPast, isSameDay, reason } = checkIsClosed(date, dateKey);
@@ -197,27 +245,50 @@ export default function SlotSelector({
                         }
                       }
                     }}
-                    className={`relative h-9 rounded-lg text-xs font-medium transition ${
+                    className={`relative h-9 w-9 sm:h-10 sm:w-10 mx-auto flex items-center justify-center rounded-xl text-xs sm:text-sm font-semibold transition-all duration-150 ${
                       isSelected
-                        ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/40'
+                        ? 'text-white font-extrabold z-10'
                         : isPast
-                        ? 'text-slate-700 cursor-not-allowed opacity-40'
+                        ? 'text-white/20 cursor-not-allowed'
                         : isSameDay
-                        ? 'bg-amber-950/20 text-amber-500/80 border border-amber-900/40 cursor-not-allowed'
+                        ? 'cursor-not-allowed'
                         : isClosed
-                        ? 'bg-slate-950/80 text-slate-600 cursor-not-allowed border border-slate-900'
-                        : 'text-slate-200 hover:bg-slate-800'
+                        ? 'cursor-not-allowed text-white/40'
+                        : 'text-white hover:bg-white/10 hover:text-white'
                     }`}
+                    style={
+                      isSelected
+                        ? {
+                            background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                            boxShadow: '0 4px 16px rgba(37, 99, 235, 0.5), 0 0 0 2px rgba(255,255,255,0.2)',
+                            transform: 'scale(1.05)',
+                          }
+                        : isSameDay
+                        ? {
+                            background: 'rgba(245, 158, 11, 0.08)',
+                            border: '1px solid rgba(245, 158, 11, 0.25)',
+                            color: '#fbbf24',
+                          }
+                        : isClosed
+                        ? {
+                            background: 'rgba(255, 255, 255, 0.02)',
+                            border: '1px solid rgba(255, 255, 255, 0.04)',
+                          }
+                        : {
+                            background: 'rgba(255, 255, 255, 0.04)',
+                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                          }
+                    }
                   >
-                    <span>{date.getDate()}</span>
+                    <span className={isSelected ? 'text-white font-extrabold' : ''}>{date.getDate()}</span>
 
-                    {/* Monday lock — only on future non-same-day Mondays */}
+                    {/* Monday lock */}
                     {!isPast && !isSameDay && isMonday && (
-                      <Lock className="w-2.5 h-2.5 absolute bottom-1 right-1 text-red-500/70" />
+                      <Lock className="w-2.5 h-2.5 absolute bottom-1 right-1 text-red-400" />
                     )}
 
-                    {/* Poya / Holiday dot — only on future non-same-day */}
-                    {!isPast && !isSameDay && !isMonday && (POYA_DATES.has(dateKey) || HOLIDAY_DATES.has(dateKey)) && (
+                    {/* Poya / Holiday dot */}
+                    {!isPast && !isSameDay && !isMonday && !isSelected && (POYA_DATES.has(dateKey) || HOLIDAY_DATES.has(dateKey)) && (
                       <span
                         className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${
                           POYA_DATES.has(dateKey) ? 'bg-amber-400' : 'bg-rose-400'
@@ -225,8 +296,8 @@ export default function SlotSelector({
                       />
                     )}
 
-                    {/* Amber indicator on today (same-day booking closed) */}
-                    {isToday && (
+                    {/* Amber indicator on today */}
+                    {isToday && !isSelected && (
                       <span
                         className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400"
                         title={t('booking.closedSameDay')}
@@ -237,8 +308,48 @@ export default function SlotSelector({
               })}
             </div>
 
+            {/* Selected Date Confirmation Banner */}
+            <div
+              className="mt-3.5 p-2.5 rounded-xl flex items-center justify-between"
+              style={{
+                background: 'rgba(37, 99, 235, 0.1)',
+                border: '1px solid rgba(37, 99, 235, 0.25)',
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-blue-400 shrink-0" />
+                <span className="text-xs text-body font-medium">
+                  {lang === 'si' ? 'තෝරාගත් දිනය:' : 'Selected Date:'}
+                </span>
+                <span className="text-xs font-bold font-mono text-blue-300">
+                  {selectedDate}
+                </span>
+                {weekdayLabel && (
+                  <span className="text-[11px] font-semibold text-white">
+                    ({weekdayLabel})
+                  </span>
+                )}
+              </div>
+              {!inline && (
+                <button
+                  type="button"
+                  onClick={() => setCalendarOpen(false)}
+                  className="text-xs font-bold px-3 py-1 rounded-lg text-white transition shadow-sm"
+                  style={{
+                    background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                    boxShadow: '0 2px 10px rgba(37,99,235,0.4)',
+                  }}
+                >
+                  {lang === 'si' ? 'තහවුරු කරන්න' : 'Done'}
+                </button>
+              )}
+            </div>
+
             {/* Legend */}
-            <div className="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-x-3 gap-y-2 text-[10px] text-slate-400">
+            <div
+              className="mt-3.5 pt-3 flex flex-wrap gap-x-3 gap-y-2 text-[10px]"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.07)', color: 'var(--text-muted)' }}
+            >
               <span className="inline-flex items-center gap-1 font-semibold text-red-400">
                 <Lock className="w-2.5 h-2.5" /> {t('booking.legendMonday')}
               </span>
@@ -248,16 +359,23 @@ export default function SlotSelector({
               <span className="inline-flex items-center gap-1">
                 <i className="w-2 h-2 rounded-full bg-rose-400 not-italic" /> {t('booking.legendHoliday')}
               </span>
-              <span className="inline-flex items-center gap-1 font-semibold text-amber-400/90">
+              <span className="inline-flex items-center gap-1 font-semibold text-amber-400">
                 <Clock className="w-2.5 h-2.5" /> {t('booking.legendSameDay')}
               </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-slate-700" /> {t('booking.legendPast')}
+              <span className="inline-flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                <span className="w-2 h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }} /> {t('booking.legendPast')}
               </span>
             </div>
 
             {/* Booking Notice */}
-            <div className="mt-2.5 p-2 bg-slate-950/70 border border-slate-800 rounded-lg text-[10px] text-slate-400 flex items-center gap-1.5">
+            <div
+              className="mt-2.5 p-2 rounded-lg text-[10px] flex items-center gap-1.5"
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                color: 'var(--text-body)',
+              }}
+            >
               <Clock className="w-3 h-3 text-amber-400 shrink-0" />
               <span>
                 {t('booking.advanceNoticeInline')}
@@ -267,11 +385,10 @@ export default function SlotSelector({
         )}
       </div>
 
-      <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
-        <Clock className="w-3 h-3 text-blue-400 shrink-0" />
+      <p className="text-[11px] text-mutedText mt-1.5 flex items-center gap-1">
+        <Clock className="w-3 h-3 text-brandBlue shrink-0" />
         <span>{t('booking.advanceNoticeInline')}</span>
       </p>
     </div>
   );
 }
-

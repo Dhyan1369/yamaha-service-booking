@@ -18,19 +18,25 @@ export default function Input({
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const isPasswordField = type === 'password';
-
   const inputType = isPasswordField ? (showPassword ? 'text' : 'password') : type;
 
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={id} className="block text-xs font-semibold text-slate-400 mb-1.5">
-          {label} {required && <span className="text-red-400">*</span>}
+        <label
+          htmlFor={id}
+          className="block text-xs font-semibold mb-1.5"
+          style={{ color: 'var(--text-body)' }}
+        >
+          {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
       <div className="relative">
         {Icon && (
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+          <div
+            className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"
+            style={{ color: 'var(--text-muted)' }}
+          >
             <Icon className="w-4 h-4" />
           </div>
         )}
@@ -43,28 +49,61 @@ export default function Input({
           placeholder={placeholder}
           required={required}
           disabled={disabled}
-          className={`w-full bg-slate-950 border ${
-            error ? 'border-red-500/60 focus:border-red-500' : 'border-slate-800 focus:border-blue-500'
-          } rounded-xl ${
+          className={`w-full text-sm outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
             Icon ? 'pl-10' : 'px-3.5'
-          } ${isPasswordField ? 'pr-10' : 'pr-3.5'} py-2.5 text-white placeholder-slate-500 text-sm outline-none transition focus:ring-1 focus:ring-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+          } ${isPasswordField ? 'pr-10' : 'pr-3.5'} py-2.5 ${className}`}
+          style={{
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: error
+              ? '1px solid rgba(239,68,68,0.5)'
+              : '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '12px',
+            color: 'var(--text-heading)',
+            caretColor: '#3b82f6',
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.border = error
+              ? '1px solid rgba(239,68,68,0.7)'
+              : '1px solid rgba(37, 99, 235, 0.5)';
+            e.currentTarget.style.boxShadow = error
+              ? '0 0 0 3px rgba(239,68,68,0.1)'
+              : '0 0 0 3px rgba(37, 99, 235, 0.1)';
+            e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.border = error
+              ? '1px solid rgba(239,68,68,0.5)'
+              : '1px solid rgba(255,255,255,0.08)';
+            e.currentTarget.style.boxShadow = 'none';
+            e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+          }}
           {...props}
         />
 
+        {/* Password toggle — single eye icon, right side only */}
         {isPasswordField && (
           <button
             type="button"
             tabIndex={-1}
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white transition"
+            className="absolute inset-y-0 right-0 pr-3.5 flex items-center transition-colors duration-200"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-heading)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}
             title={showPassword ? 'Hide Password' : 'Show Password'}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         )}
       </div>
-      {error && <p className="text-[11px] text-red-400 mt-1 font-medium">{error}</p>}
-      {helperText && !error && <p className="text-[11px] text-slate-500 mt-1">{helperText}</p>}
+
+      {error && (
+        <p className="text-[11px] mt-1.5 font-medium" style={{ color: '#f87171' }}>{error}</p>
+      )}
+      {helperText && !error && (
+        <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-muted)' }}>{helperText}</p>
+      )}
     </div>
   );
 }
