@@ -373,17 +373,38 @@ export const bookingService = {
   },
 
   async cancelBooking(id) {
+    const todayKey = toDateKey(new Date());
+
     if (!isSupabaseConfigured || !supabase) {
+      const localBookings = JSON.parse(localStorage.getItem('yamaha_local_bookings') || '[]');
+      const b = localBookings.find((item) => item.id === id);
+      if (b && b.date < todayKey) {
+        throw new Error('පසුගිය දිනයන්හි වෙන්කිරීම් අවලංගු කළ නොහැක. (Cannot cancel a booking for a past date).');
+      }
       return this.updateBookingStatus(id, 'Cancelled');
     }
 
-    // Try RPC cancel_booking first (handles both user & admin ownership checks)
+    // Guard: check booking date before invoking cancel RPC
     try {
+      const { data: bData } = await supabase
+        .from('bookings')
+        .select('date, status')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (bData && bData.date < todayKey) {
+        throw new Error('පසුගිය දිනයන්හි වෙන්කිරීම් අවලංගු කළ නොහැක. (Cannot cancel a booking for a past date).');
+      }
+
+      // Try RPC cancel_booking first (handles both user & admin ownership checks)
       const { data, error } = await supabase.rpc('cancel_booking', { p_booking_id: id });
       if (!error && data?.success) {
         return { id, status: 'Cancelled' };
       }
-    } catch {
+    } catch (err) {
+      if (err.message && err.message.includes('Cannot cancel a booking for a past date')) {
+        throw err;
+      }
       // Fallback to direct update
     }
 

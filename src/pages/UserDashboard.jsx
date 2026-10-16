@@ -7,6 +7,7 @@ import TokenReceipt from '../components/booking/TokenReceipt';
 import { useAuth } from '../hooks/useAuth';
 import { useBookings } from '../hooks/useBookings';
 import { useLanguage } from '../context/LanguageContext';
+import { toDateKey } from '../services/bookingService';
 
 export default function UserDashboard() {
   const { user, loading } = useAuth();
@@ -74,7 +75,15 @@ export default function UserDashboard() {
   // Query bookings for logged-in user
   const customerBookings = getUserBookings(user);
 
-  const getStatusBadge = (status) => {
+  const isPastBooking = (bookingDate) => {
+    if (!bookingDate) return false;
+    return bookingDate < toDateKey(new Date());
+  };
+
+  const getStatusBadge = (status, bookingDate) => {
+    if (status === 'Pending' && isPastBooking(bookingDate)) {
+      return 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
+    }
     switch (status) {
       case 'Completed':
         return 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20';
@@ -87,7 +96,10 @@ export default function UserDashboard() {
     }
   };
 
-  const getTranslatedStatus = (status) => {
+  const getTranslatedStatus = (status, bookingDate) => {
+    if (status === 'Pending' && isPastBooking(bookingDate)) {
+      return t('dashboard.statusExpired') || 'Expired';
+    }
     switch (status) {
       case 'Completed':
         return t('dashboard.statusCompleted');
@@ -104,6 +116,10 @@ export default function UserDashboard() {
 
   const handleConfirmCancel = async () => {
     if (!bookingToCancel) return;
+    if (isPastBooking(bookingToCancel.date)) {
+      setCancelErrorMsg(t('dashboard.errCannotCancelPast'));
+      return;
+    }
     setCancelling(true);
     setCancelErrorMsg('');
     try {
@@ -384,8 +400,8 @@ export default function UserDashboard() {
                             </span>
                           </td>
                           <td className="px-5 py-4">
-                            <span className={`inline-flex items-center justify-center w-24 py-1 rounded-full text-xs font-semibold ${getStatusBadge(booking.status)}`}>
-                              {getTranslatedStatus(booking.status)}
+                            <span className={`inline-flex items-center justify-center w-24 py-1 rounded-full text-xs font-semibold ${getStatusBadge(booking.status, booking.date)}`}>
+                              {getTranslatedStatus(booking.status, booking.date)}
                             </span>
                           </td>
                           <td className="px-5 py-4 text-center">
@@ -415,30 +431,45 @@ export default function UserDashboard() {
                               </button>
 
                               {booking.status === 'Pending' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setCancelErrorMsg('');
-                                    setBookingToCancel(booking);
-                                  }}
-                                  className="h-8 w-[120px] rounded-xl transition-all duration-200 inline-flex items-center justify-center gap-1.5 text-xs font-bold"
-                                  style={{
-                                    background: 'rgba(239, 68, 68, 0.1)',
-                                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                                    color: '#f87171',
-                                  }}
-                                  onMouseEnter={e => {
-                                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                  }}
-                                  onMouseLeave={e => {
-                                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                  }}
-                                >
-                                  <XCircle className="w-3.5 h-3.5" />
-                                  <span>{t('dashboard.cancelBookingBtn')}</span>
-                                </button>
+                                !isPastBooking(booking.date) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCancelErrorMsg('');
+                                      setBookingToCancel(booking);
+                                    }}
+                                    className="h-8 w-[120px] rounded-xl transition-all duration-200 inline-flex items-center justify-center gap-1.5 text-xs font-bold"
+                                    style={{
+                                      background: 'rgba(239, 68, 68, 0.1)',
+                                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                                      color: '#f87171',
+                                    }}
+                                    onMouseEnter={e => {
+                                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                                      e.currentTarget.style.transform = 'translateY(-1px)';
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                      e.currentTarget.style.transform = 'translateY(0)';
+                                    }}
+                                  >
+                                    <XCircle className="w-3.5 h-3.5" />
+                                    <span>{t('dashboard.cancelBookingBtn')}</span>
+                                  </button>
+                                ) : (
+                                  <span
+                                    className="h-8 w-[120px] rounded-xl inline-flex items-center justify-center gap-1.5 text-xs font-medium select-none"
+                                    style={{
+                                      background: 'rgba(255, 255, 255, 0.03)',
+                                      border: '1px solid rgba(255, 255, 255, 0.07)',
+                                      color: 'var(--text-muted)',
+                                    }}
+                                    title={t('dashboard.errCannotCancelPast')}
+                                  >
+                                    <Clock className="w-3.5 h-3.5 text-slate-500" />
+                                    <span>{t('dashboard.datePassed')}</span>
+                                  </span>
+                                )
                               ) : booking.status === 'Cancelled' ? (
                                 <span
                                   className="h-8 w-[120px] rounded-xl inline-flex items-center justify-center gap-1.5 text-xs font-medium select-none"
@@ -565,8 +596,8 @@ export default function UserDashboard() {
                       className="pt-2.5 flex flex-wrap items-center justify-between gap-2"
                       style={{ borderTop: '1px solid rgba(255, 255, 255, 0.07)' }}
                     >
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadge(booking.status)}`}>
-                        {getTranslatedStatus(booking.status)}
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadge(booking.status, booking.date)}`}>
+                        {getTranslatedStatus(booking.status, booking.date)}
                       </span>
 
                       <div className="flex items-center gap-2">
@@ -585,22 +616,37 @@ export default function UserDashboard() {
                         </button>
 
                         {booking.status === 'Pending' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCancelErrorMsg('');
-                              setBookingToCancel(booking);
-                            }}
-                            className="h-8 px-3 rounded-xl transition inline-flex items-center gap-1 text-xs font-bold"
-                            style={{
-                              background: 'rgba(239, 68, 68, 0.1)',
-                              border: '1px solid rgba(239, 68, 68, 0.25)',
-                              color: '#f87171',
-                            }}
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>{t('dashboard.cancelBookingBtn')}</span>
-                          </button>
+                          !isPastBooking(booking.date) ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCancelErrorMsg('');
+                                setBookingToCancel(booking);
+                              }}
+                              className="h-8 px-3 rounded-xl transition inline-flex items-center gap-1 text-xs font-bold"
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid rgba(239, 68, 68, 0.25)',
+                                color: '#f87171',
+                              }}
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>{t('dashboard.cancelBookingBtn')}</span>
+                            </button>
+                          ) : (
+                            <span
+                              className="h-8 px-3 rounded-xl inline-flex items-center gap-1 text-xs font-medium select-none"
+                              style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.07)',
+                                color: 'var(--text-muted)',
+                              }}
+                              title={t('dashboard.errCannotCancelPast')}
+                            >
+                              <Clock className="w-3.5 h-3.5 text-slate-500" />
+                              <span>{t('dashboard.datePassed')}</span>
+                            </span>
+                          )
                         )}
                       </div>
                     </div>
